@@ -1,13 +1,6 @@
 <?php
 declare(strict_types=1);
 
-class Minz_ActionController {}
-final class Minz_ExtensionManager {
-	public static function findExtension(string $name): ?object { return null; }
-}
-final class Minz_Log {
-	public static function warning(string $message): void {}
-}
 final class FreshRSS_Auth {
 	public static function hasAccess(): bool { return ($GLOBALS['fas_case'] ?? '') !== 'unauthorized'; }
 	public static function isCsrfOk(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['bad-csrf', 'models-bad-csrf'], true); }
@@ -15,7 +8,10 @@ final class FreshRSS_Auth {
 final class Minz_Request {
 	public static function isPost(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['get', 'models-get'], true); }
 	public static function paramString(string $name, bool $plaintext = false): string {
-		return $name === 'id' ? (($GLOBALS['fas_case'] ?? '') === 'invalid-id' ? '1/not-an-id' : '12345678901234567890') : '';
+		if ($name === 'id') return ($GLOBALS['fas_case'] ?? '') === 'invalid-id' ? '1/not-an-id' : '12345678901234567890';
+		if ($name === 'provider') return 'openai';
+		if ($name === 'api_url') return 'https://api.openai.com/v1';
+		return '';
 	}
 }
 final class FreshRSS_Factory {
@@ -25,13 +21,19 @@ final class FreshRSS_Factory {
 		};
 	}
 }
+final class Minz_Log { public static function warning(string $message): void {} }
+final class FetchAndSummarizeExtension {
+	public function getSetting(string $key, string $default = ''): string {
+		return match ($key) {
+			'provider' => 'openai',
+			'api_url' => 'https://api.openai.com/v1',
+			default => $default,
+		};
+	}
+}
 
-require_once dirname(__DIR__) . '/Controllers/fetchandsummarizeController.php';
+require_once dirname(__DIR__) . '/lib/bootstrap.php';
 $GLOBALS['fas_case'] = $argv[1] ?? '';
 register_shutdown_function(static function (): void { echo "\n__HTTP__" . http_response_code(); });
-$controller = new FreshExtension_fetchandsummarize_Controller();
-$controller->firstAction();
-if (str_starts_with($GLOBALS['fas_case'], 'models-')) {
-	$controller->modelsAction();
-}
-$controller->summarizeAction();
+$action = str_starts_with($GLOBALS['fas_case'], 'models-') ? 'models' : 'summarize';
+FetchAndSummarize\AjaxActions::dispatch(new FetchAndSummarizeExtension(), $action);

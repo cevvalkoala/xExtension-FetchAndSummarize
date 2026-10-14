@@ -152,7 +152,6 @@ $test('FreshRSS configuration is saved atomically and keeps provider keys scoped
 			$settings = $data['extensions']['FetchAndSummarize'];
 			$assert($data['saved'] === true && $settings['model'] === 'new-model' && $settings['prompt'] === 'new prompt');
 			$assert($settings['api_key'] === 'saved-secret' && $settings['other'] === 'preserve-me');
-			$assert(isset($data['controllers']['fetchandsummarize']));
 		},
 		'change-provider' => static function (array $data) use ($assert): void {
 			$settings = $data['extensions']['FetchAndSummarize'];
@@ -276,7 +275,7 @@ $test('provider error bodies are never returned to the caller', static function 
 	$assert(!str_contains($error->getMessage(), $secret) && !str_contains($error->getMessage(), 'private-key'));
 });
 
-$test('controller rejects missing auth, CSRF, POST, and invalid IDs before lookup', static function () use ($assert): void {
+$test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid IDs', static function () use ($assert): void {
 	$cases = [
 		'unauthorized' => ['unauthorized', 403],
 		'bad-csrf' => ['bad-csrf', 403],
@@ -285,12 +284,13 @@ $test('controller rejects missing auth, CSRF, POST, and invalid IDs before looku
 		'missing-entry' => ['valid', 404],
 		'model-wrong-method' => ['models-get', 405],
 		'model-bad-csrf' => ['models-bad-csrf', 403],
+		'model-missing-key' => ['models-no-key', 400],
 	];
 	foreach ($cases as $name => [$scenario, $expectedStatus]) {
-		$command = [PHP_BINARY, __DIR__ . '/controller-case.php', $scenario];
+		$command = [PHP_BINARY, __DIR__ . '/ajax-case.php', $scenario];
 		$pipes = [];
 		$process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
-		if (!is_resource($process)) throw new RuntimeException('could not start controller case');
+		if (!is_resource($process)) throw new RuntimeException('could not start AJAX action case');
 		fclose($pipes[0]);
 		$output = stream_get_contents($pipes[1]);
 		$error = stream_get_contents($pipes[2]);
@@ -311,9 +311,13 @@ $test('publishable metadata and all pinned dependency licenses are present', sta
 	$dependencies = json_decode((string)file_get_contents($root . '/vendor/dependencies.json'), true, 512, JSON_THROW_ON_ERROR);
 	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'AGPL-3.0-or-later');
 	$extension = (string)file_get_contents($root . '/extension.php');
-	$controller = (string)file_get_contents($root . '/Controllers/fetchandsummarizeController.php');
-	$assert(str_contains($extension, "registerController('fetchandsummarize')"));
-	$assert(str_contains($controller, 'class FreshExtension_fetchandsummarize_Controller'));
+	$ajax = (string)file_get_contents($root . '/lib/AjaxActions.php');
+	$assert(str_contains($extension, "'c' => 'extension', 'a' => 'configure'"));
+	$assert(substr_count($extension, "], 'php')") >= 2, 'JavaScript endpoints must not HTML-escape ampersands');
+	$assert(str_contains($extension, 'AjaxActions::dispatch($this, $ajaxAction)'));
+	$assert(str_contains($extension, "'fas_action' => 'summarize'"));
+	$assert(str_contains($extension, "'fas_action' => 'models'"));
+	$assert(str_contains($ajax, "if (\$action === 'models')"));
 	$licensePaths = [
 		'fivefilters/readability.php' => 'vendor/fivefilters/readability.php/LICENSE',
 		'masterminds/html5' => 'vendor/masterminds/html5/LICENSE.txt',

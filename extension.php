@@ -3,14 +3,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/bootstrap.php';
 
-// Register during discovery as well as init because FreshRSS may render user-extension settings before enabling it.
-Minz_Dispatcher::registerController('fetchandsummarize', __DIR__);
-
 final class FetchAndSummarizeExtension extends Minz_Extension {
 	public function init(): void {
 		parent::init();
 		$this->registerTranslates();
-		$this->registerController('fetchandsummarize');
 		$this->registerHook('js_vars', [$this, 'jsVars']);
 		Minz_View::appendStyle($this->getFileUrl('fetchandsummarize.css'));
 		Minz_View::appendScript($this->getFileUrl('fetchandsummarize.js'), cond: false, defer: true, async: false);
@@ -20,8 +16,8 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 	/** @param array<string,mixed> $vars @return array<string,mixed> */
 	public function jsVars(array $vars): array {
 		$vars['fetch_and_summarize'] = [
-			'url' => Minz_Url::display(['c' => 'fetchandsummarize', 'a' => 'summarize']),
-			'modelsUrl' => Minz_Url::display(['c' => 'fetchandsummarize', 'a' => 'models']),
+			'url' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'summarize']], 'php'),
+			'modelsUrl' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'models']], 'php'),
 			'i18n' => [
 				'button' => _t('ext.fetch_and_summarize.button'),
 				'loading' => _t('ext.fetch_and_summarize.loading'),
@@ -46,6 +42,11 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 		}
 		if (!FreshRSS_Auth::isCsrfOk()) {
 			Minz_Error::error(403);
+		}
+		$ajaxAction = Minz_Request::paramString('fas_action', plaintext: true);
+		if (in_array($ajaxAction, ['models', 'summarize'], true)) {
+			FetchAndSummarize\AjaxActions::dispatch($this, $ajaxAction);
+			return;
 		}
 
 		$provider = Minz_Request::paramString('provider', plaintext: true);
