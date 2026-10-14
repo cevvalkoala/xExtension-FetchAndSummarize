@@ -10,8 +10,12 @@ class Element {
 		this.children = [];
 		this.dataset = {};
 		this.attributes = {};
-	this.className = '';
+		this.className = '';
 		this.id = '';
+		this.value = '';
+		this.options = [];
+		this.selectedOptions = [];
+		this.listeners = new Map();
 		this.disabled = false;
 		this.parentElement = null;
 		this.textContent = '';
@@ -22,12 +26,18 @@ class Element {
 		this.children.push(child);
 	}
 
+	replaceChildren(...children) {
+		this.children = [];
+		children.forEach((child) => this.append(child));
+	}
+
 	prepend(child) {
 		child.parentElement = this;
 		this.children.unshift(child);
 	}
 
 	setAttribute(name, value) { this.attributes[name] = value; }
+	addEventListener(name, handler) { this.listeners.set(name, handler); }
 
 	closest(selector) {
 		return selector === '.fetchandsummarize-button' && this.className.includes('fetchandsummarize-button') ? this : null;
@@ -64,6 +74,33 @@ class Entry extends Element {
 const entries = [new Entry('flux_101'), new Entry('flux_202', false)];
 const handlers = new Map();
 const bodyHandlers = new Map();
+const options = [
+	{ value: 'openai', dataset: { url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' } },
+	{ value: 'anthropic', dataset: { url: 'https://api.anthropic.com', model: 'claude-3-7-sonnet-latest' } },
+	{ value: 'gemini', dataset: { url: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash' } },
+];
+const providerControl = new Element('select');
+providerControl.value = 'openai';
+providerControl.options = options;
+providerControl.selectedOptions = [options[0]];
+const urlControl = new Element('input');
+urlControl.value = options[0].dataset.url;
+const keyControl = new Element('input');
+keyControl.value = 'unsaved-gemini-key';
+const modelControl = new Element('input');
+modelControl.value = options[0].dataset.model;
+const loadModelsButton = new Element('button');
+const modelList = new Element('datalist');
+const modelStatus = new Element('p');
+const controls = new Map([
+	['fas-provider', providerControl],
+	['fas-api-url', urlControl],
+	['fas-api-key', keyControl],
+	['fas-model', modelControl],
+	['fas-load-models', loadModelsButton],
+	['fas-model-list', modelList],
+	['fas-model-status', modelStatus],
+]);
 const allElements = () => {
 	const result = [];
 	const visit = (element) => { result.push(element); element.children.forEach(visit); };
@@ -73,19 +110,36 @@ const allElements = () => {
 
 global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
 	url: '/?c=FetchAndSummarize&a=summarize',
-	i18n: { button: 'Fetch and Summarize', loading: 'Loading...', error: 'Could not summarize.' },
+i18n: {
+		button: 'Fetch and Summarize', loading: 'Loading...', error: 'Could not summarize.',
+		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
+		noModels: 'No models.', modelsError: 'Model list error.',
+	},
+modelsUrl: '/?c=FetchAndSummarize&a=models',
 } } } };
 global.document = {
 	body: { addEventListener: (name, handler) => bodyHandlers.set(name, handler) },
 	addEventListener: (name, handler) => handlers.set(name, handler),
 	querySelectorAll: (selector) => selector === '[id^="flux_"]' ? entries : [],
 	createElement: (tagName) => new Element(tagName),
-	getElementById: (id) => allElements().find((element) => element.id === id) || null,
+	getElementById: (id) => controls.get(id) || allElements().find((element) => element.id === id) || null,
 };
 
 let requests = 0;
+let modelRequests = 0;
 let completeFirst;
 global.fetch = (url, options) => {
+	if (url === '/?c=FetchAndSummarize&a=models') {
+		modelRequests++;
+		assert.equal(options.method, 'POST');
+		assert.equal(options.credentials, 'same-origin');
+		const body = new URLSearchParams(options.body);
+		assert.equal(body.get('provider'), 'gemini');
+		assert.equal(body.get('api_url'), 'https://custom.example/v1');
+		assert.equal(body.get('api_key'), 'unsaved-gemini-key');
+		assert.equal(body.get('_csrf'), 'csrf-test');
+		return Promise.resolve({ ok: true, json: async () => ({ models: ['gemini-flash', 'gemini-pro'] }) });
+	}
 	requests++;
 	assert.equal(url, '/?c=FetchAndSummarize&a=summarize');
 	assert.equal(options.method, 'POST');
@@ -100,6 +154,35 @@ global.fetch = (url, options) => {
 require(path.join(__dirname, '..', 'static', 'fetchandsummarize.js'));
 
 async function run() {
+	const providerChange = providerControl.listeners.get('change');
+	providerControl.value = 'anthropic';
+	providerControl.selectedOptions = [options[1]];
+	providerChange();
+	assert.equal(urlControl.value, options[1].dataset.url, 'provider selection should update a default API URL');
+	assert.equal(modelControl.value, options[1].dataset.model, 'provider selection should update its example model');
+	assert.equal(keyControl.value, '', 'provider changes should clear unsaved credentials for the previous provider');
+	urlControl.value = 'https://custom.example/v1';
+	providerControl.value = 'gemini';
+	providerControl.selectedOptions = [options[2]];
+	providerChange();
+	assert.equal(urlControl.value, 'https://custom.example/v1', 'custom API URLs should be preserved');
+	assert.equal(modelControl.value, options[2].dataset.model);
+	keyControl.value = 'unsaved-gemini-key';
+	await loadModelsButton.listeners.get('click')();
+	assert.equal(modelRequests, 1);
+	assert.equal(modelList.children.length, 2, 'returned names should populate the model suggestions');
+	assert.equal(modelStatus.textContent, 'Loaded 2 models.');
+	modelControl.value = modelList.children[0].value;
+	assert.equal(modelControl.value, 'gemini-flash', 'a returned model can be selected in the editable field');
+	providerControl.value = 'openai';
+	providerControl.selectedOptions = [options[0]];
+	providerChange();
+	assert.equal(modelControl.value, options[0].dataset.model, 'switching providers should discard previously loaded model choices');
+	assert.equal(keyControl.value, '', 'provider changes should not send a prior key to a different service');
+	assert.equal(window.context.extensions.fetch_and_summarize.api_key, undefined, 'keys must not be injected into global context');
+	const configure = fs.readFileSync(path.join(__dirname, '..', 'configure.phtml'), 'utf8');
+	assert.ok(configure.indexOf('name="api_key"') < configure.indexOf('name="model"'), 'API key control should precede model selection');
+
 	const button101 = entries[0].querySelector('.fetchandsummarize-button');
 	const button202 = entries[1].querySelector('.fetchandsummarize-button');
 	assert.ok(button101 && button202, 'controls should be inserted into multiple entries');

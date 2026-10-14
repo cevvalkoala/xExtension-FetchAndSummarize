@@ -10,10 +10,10 @@ final class Minz_Log {
 }
 final class FreshRSS_Auth {
 	public static function hasAccess(): bool { return ($GLOBALS['fas_case'] ?? '') !== 'unauthorized'; }
-	public static function isCsrfOk(): bool { return ($GLOBALS['fas_case'] ?? '') !== 'bad-csrf'; }
+	public static function isCsrfOk(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['bad-csrf', 'models-bad-csrf'], true); }
 }
 final class Minz_Request {
-	public static function isPost(): bool { return ($GLOBALS['fas_case'] ?? '') !== 'get'; }
+	public static function isPost(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['get', 'models-get'], true); }
 	public static function paramString(string $name, bool $plaintext = false): string {
 		return $name === 'id' ? (($GLOBALS['fas_case'] ?? '') === 'invalid-id' ? '1/not-an-id' : '12345678901234567890') : '';
 	}
@@ -31,4 +31,7 @@ $GLOBALS['fas_case'] = $argv[1] ?? '';
 register_shutdown_function(static function (): void { echo "\n__HTTP__" . http_response_code(); });
 $controller = new FreshExtension_FetchAndSummarize_Controller();
 $controller->firstAction();
+if (str_starts_with($GLOBALS['fas_case'], 'models-')) {
+	$controller->modelsAction();
+}
 $controller->summarizeAction();

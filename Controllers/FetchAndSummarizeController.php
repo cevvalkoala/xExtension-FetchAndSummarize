@@ -62,7 +62,48 @@ final class FreshExtension_FetchAndSummarize_Controller extends Minz_ActionContr
 		}
 	}
 
-	/** @param array<string,string> $payload */
+	public function modelsAction(): void {
+		if (!Minz_Request::isPost()) {
+			$this->respond(405, ['error' => 'Use the Load models button from the extension settings.']);
+		}
+		if (!FreshRSS_Auth::isCsrfOk()) {
+			$this->respond(403, ['error' => 'The security token expired. Reload FreshRSS and try again.']);
+		}
+		if ($this->extension === null) {
+			$this->respond(500, ['error' => 'Fetch and Summarize is not configured for this user.']);
+		}
+
+		try {
+			$provider = Minz_Request::paramString('provider', plaintext: true);
+			$submittedKey = Minz_Request::paramString('api_key', plaintext: true);
+			$lookup = FetchAndSummarize\Settings::validateModelLookup(
+				$provider,
+				trim(Minz_Request::paramString('api_url', plaintext: true)),
+				$submittedKey
+			);
+			$lookup['api_key'] = FetchAndSummarize\Settings::modelLookupKey(
+				$lookup['provider'],
+				$lookup['api_url'],
+				$lookup['api_key'],
+				$this->extension->getSetting('provider', 'openai'),
+				$this->extension->getSetting('api_url', FetchAndSummarize\Settings::DEFAULT_URLS[$this->extension->getSetting('provider', 'openai')] ?? ''),
+				$this->extension->getSetting('api_key')
+			);
+			if ($provider !== 'ollama' && trim($lookup['api_key']) === '') {
+				$this->respond(400, ['error' => 'Enter an API key before loading provider models.']);
+			}
+			$models = (new FetchAndSummarize\ProviderClient())->listModels($lookup);
+			$this->respond(200, ['models' => $models]);
+		} catch (\InvalidArgumentException $e) {
+			$this->respond(400, ['error' => $e->getMessage()]);
+		} catch (\Throwable $e) {
+			Minz_Log::warning('FetchAndSummarize model lookup failed (' . get_class($e) . ').');
+			$message = $e instanceof \RuntimeException ? $e->getMessage() : 'The provider models could not be loaded. Check the provider settings and try again.';
+			$this->respond(422, ['error' => $message]);
+		}
+	}
+
+	/** @param array<string,mixed> $payload */
 	private function respond(int $status, array $payload): never {
 		http_response_code($status);
 		header('Content-Type: application/json; charset=utf-8');

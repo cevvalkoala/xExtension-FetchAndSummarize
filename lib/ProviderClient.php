@@ -9,9 +9,69 @@ final class ProviderClient {
 	public const HTTP_TIMEOUT = 180;
 	/** @var \Closure(string,array<string,string>,string,int,int):array{status:int,body:string} */
 	private \Closure $requester;
+	/** @var \Closure(string,array<string,string>,int,int):array{status:int,body:string} */
+	private \Closure $modelsRequester;
 
-	public function __construct(?callable $requester = null) {
+	public function __construct(?callable $requester = null, ?callable $modelsRequester = null) {
 		$this->requester = $requester === null ? $this->curlRequest(...) : \Closure::fromCallable($requester);
+		$this->modelsRequester = $modelsRequester === null ? $this->curlModelsRequest(...) : \Closure::fromCallable($modelsRequester);
+	}
+
+	/** @param array{provider:string,api_url:string,api_key:string} $settings @return list<string> */
+	public function listModels(array $settings): array {
+		$provider = $settings['provider'];
+		$base = self::normalizeApiUrl($provider, $settings['api_url']);
+		$key = Settings::updateApiKey('', $settings['api_key'], false);
+		if ($provider !== 'ollama' && trim($key) === '') {
+			throw new \RuntimeException('Enter an API key before loading provider models.');
+		}
+		[$url, $headers] = $this->modelsRequestFor($provider, $base, $key);
+		$response = ($this->modelsRequester)($url, $headers, 30, 8);
+		if ($response['status'] < 200 || $response['status'] >= 300) {
+			throw new \RuntimeException('The provider rejected the model-list request. Check the API URL and key.');
+		}
+		if (strlen($response['body']) > self::MAX_RESPONSE_BYTES) {
+			throw new \RuntimeException('The provider model list exceeded the allowed size.');
+		}
+		$data = json_decode($response['body'], true);
+		if (!is_array($data)) {
+			throw new \RuntimeException('The provider returned an unreadable model list.');
+		}
+		$items = match ($provider) {
+			'gemini' => $data['models'] ?? [],
+			'ollama' => $data['models'] ?? [],
+			default => $data['data'] ?? [],
+		};
+		if (!is_array($items)) {
+			return [];
+		}
+		$models = [];
+		foreach ($items as $item) {
+			if (!is_array($item)) {
+				continue;
+			}
+			$name = $provider === 'ollama' ? ($item['name'] ?? null) : ($provider === 'gemini' ? ($item['name'] ?? null) : ($item['id'] ?? null));
+			if (!is_string($name)) {
+				continue;
+			}
+			if ($provider === 'gemini') {
+				$methods = $item['supportedGenerationMethods'] ?? [];
+				if (!is_array($methods) || !in_array('generateContent', $methods, true)) {
+					continue;
+				}
+				$name = preg_replace('~^models/~', '', $name) ?? '';
+			}
+			if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\/-]{0,127}$/D', $name)) {
+				continue;
+			}
+			$models[$name] = true;
+			if (count($models) >= 500) {
+				break;
+			}
+		}
+		$names = array_keys($models);
+		sort($names, SORT_NATURAL | SORT_FLAG_CASE);
+		return $names;
 	}
 
 	public static function normalizeApiUrl(string $provider, string $url): string {
@@ -129,6 +189,32 @@ final class ProviderClient {
 		}
 	}
 
+	/** @return array{0:string,1:array<string,string>} */
+	private function modelsRequestFor(string $provider, string $base, string $key): array {
+		$headers = ['Accept' => 'application/json'];
+		switch ($provider) {
+			case 'openai':
+			case 'openrouter':
+				$headers['Authorization'] = 'Bearer ' . $key;
+				if ($provider === 'openrouter') {
+					$headers['HTTP-Referer'] = 'https://freshrss.org/';
+					$headers['X-Title'] = 'FreshRSS Fetch and Summarize';
+				}
+				return [self::endpoint($base, '/models'), $headers];
+			case 'anthropic':
+				$headers['x-api-key'] = $key;
+				$headers['anthropic-version'] = '2023-06-01';
+				return [self::endpoint($base, '/v1/models?limit=1000'), $headers];
+			case 'gemini':
+				$headers['x-goog-api-key'] = $key;
+				return [self::endpoint($base, '/v1beta/models'), $headers];
+			case 'ollama':
+				return [self::endpoint($base, '/api/tags'), $headers];
+			default:
+				throw new \InvalidArgumentException('Select a supported provider.');
+		}
+	}
+
 	/** @param array<string,mixed> $data */
 	private function responseText(string $provider, array $data): string {
 		if ($provider === 'anthropic') {
@@ -201,6 +287,52 @@ final class ProviderClient {
 		curl_close($handle);
 		if ($ok === false || $error !== 0) {
 			throw new \RuntimeException('The AI provider request failed or timed out. No automatic retry was made.');
+		}
+		return ['status' => $status, 'body' => $responseBody];
+	}
+
+	private function curlModelsRequest(string $url, array $headers, int $timeout, int $connectTimeout): array {
+		if (!function_exists('curl_init')) {
+			throw new \RuntimeException('The PHP cURL extension is required to load provider models.');
+		}
+		$handle = curl_init($url);
+		if ($handle === false) {
+			throw new \RuntimeException('The provider model-list request could not be initialized.');
+		}
+		$headerLines = [];
+		foreach ($headers as $name => $value) {
+			$headerLines[] = $name . ': ' . $value;
+		}
+		$responseBody = '';
+		$options = [
+			CURLOPT_HTTPGET => true,
+			CURLOPT_RETURNTRANSFER => false,
+			CURLOPT_FOLLOWLOCATION => false,
+			CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+			CURLOPT_TIMEOUT => $timeout,
+			CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+			CURLOPT_PROXY => '',
+			CURLOPT_SSL_VERIFYPEER => true,
+			CURLOPT_SSL_VERIFYHOST => 2,
+			CURLOPT_HTTPHEADER => $headerLines,
+			CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$responseBody): int {
+				if (strlen($responseBody) + strlen($chunk) > self::MAX_RESPONSE_BYTES) {
+					return 0;
+				}
+				$responseBody .= $chunk;
+				return strlen($chunk);
+			},
+		];
+		if (!curl_setopt_array($handle, $options)) {
+			curl_close($handle);
+			throw new \RuntimeException('The provider model-list request could not be safely configured.');
+		}
+		$ok = curl_exec($handle);
+		$status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+		$error = curl_errno($handle);
+		curl_close($handle);
+		if ($ok === false || $error !== 0) {
+			throw new \RuntimeException('The provider model-list request failed or timed out.');
 		}
 		return ['status' => $status, 'body' => $responseBody];
 	}

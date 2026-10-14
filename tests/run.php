@@ -137,6 +137,51 @@ $test('API key is preserved, replaced, or cleared explicitly', static function (
 	$assert(Settings::updateApiKey('saved-secret', 'replacement', false) === 'replacement');
 	$assert(Settings::updateApiKey('saved-secret', '', true) === '');
 	$throws(static fn () => Settings::updateApiKey('', "bad\r\nInjected: yes", false), InvalidArgumentException::class);
+	$assert(Settings::configurationApiKey('openai', Settings::DEFAULT_URLS['openai'], 'openai', Settings::DEFAULT_URLS['openai'], 'saved-secret', '', false) === 'saved-secret');
+	$assert(Settings::configurationApiKey('openai', Settings::DEFAULT_URLS['openai'], 'gemini', Settings::DEFAULT_URLS['gemini'], 'saved-secret', '', false) === '');
+	$assert(Settings::configurationApiKey('openai', Settings::DEFAULT_URLS['openai'], 'openai', 'https://custom.example/v1', 'saved-secret', '', false) === '');
+	$assert(Settings::configurationApiKey('openai', Settings::DEFAULT_URLS['openai'], 'gemini', Settings::DEFAULT_URLS['gemini'], 'saved-secret', 'new-secret', false) === 'new-secret');
+	$assert(Settings::modelLookupKey('openai', Settings::DEFAULT_URLS['openai'], '', 'openai', Settings::DEFAULT_URLS['openai'], 'saved-secret') === 'saved-secret');
+	$assert(Settings::modelLookupKey('gemini', Settings::DEFAULT_URLS['gemini'], '', 'openai', Settings::DEFAULT_URLS['openai'], 'saved-secret') === '');
+	$assert(Settings::modelLookupKey('openai', 'https://custom.example', '', 'openai', Settings::DEFAULT_URLS['openai'], 'saved-secret') === '');
+});
+
+$test('FreshRSS configuration is saved atomically and keeps provider keys scoped', static function () use ($assert): void {
+	$cases = [
+		'save' => static function (array $data) use ($assert): void {
+			$settings = $data['extensions']['FetchAndSummarize'];
+			$assert($data['saved'] === true && $settings['model'] === 'new-model' && $settings['prompt'] === 'new prompt');
+			$assert($settings['api_key'] === 'saved-secret' && $settings['other'] === 'preserve-me');
+		},
+		'change-provider' => static function (array $data) use ($assert): void {
+			$settings = $data['extensions']['FetchAndSummarize'];
+			$assert($settings['provider'] === 'gemini' && $settings['api_key'] === '');
+		},
+		'clear-key' => static function (array $data) use ($assert): void {
+			$assert($data['extensions']['FetchAndSummarize']['api_key'] === '');
+		},
+		'replace-key' => static function (array $data) use ($assert): void {
+			$assert($data['extensions']['FetchAndSummarize']['api_key'] === 'replacement-secret');
+		},
+		'invalid' => static function (array $data) use ($assert): void {
+			$assert($data['saved'] === false && $data['notification'][0] === 'bad');
+		},
+	];
+	foreach ($cases as $scenario => $verify) {
+		$pipes = [];
+		$process = proc_open([PHP_BINARY, __DIR__ . '/configure-case.php', $scenario], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
+		if (!is_resource($process)) throw new RuntimeException('could not start configure case');
+		fclose($pipes[0]);
+		$output = stream_get_contents($pipes[1]);
+		$error = stream_get_contents($pipes[2]);
+		fclose($pipes[1]);
+		fclose($pipes[2]);
+		$status = proc_close($process);
+		$assert($status === 0, $scenario . ' child failed: ' . $error);
+		$data = json_decode($output, true);
+		$assert(is_array($data), $scenario . ' returned invalid configuration state');
+		$verify($data);
+	}
 });
 
 $test('settings reject invalid providers, models, and API URL schemes', static function () use ($throws): void {
@@ -182,11 +227,45 @@ foreach ($providerCases as $provider => $case) {
 	});
 }
 
+$modelListCases = [
+	'openai' => ['endpoint' => '/v1/models', 'header' => 'Authorization', 'json' => ['data' => [['id' => 'gpt-alpha'], ['id' => 'text-embedding-model']]]],
+	'anthropic' => ['endpoint' => '/v1/models?limit=1000', 'header' => 'x-api-key', 'json' => ['data' => [['id' => 'claude-alpha']]]],
+	'gemini' => ['endpoint' => '/v1beta/models', 'header' => 'x-goog-api-key', 'json' => ['models' => [['name' => 'models/gemini-alpha', 'supportedGenerationMethods' => ['generateContent']], ['name' => 'models/embedding-only', 'supportedGenerationMethods' => ['embedContent']]]]],
+	'openrouter' => ['endpoint' => '/v1/models', 'header' => 'Authorization', 'json' => ['data' => [['id' => 'vendor/model-alpha']]]],
+	'ollama' => ['endpoint' => '/api/tags', 'header' => null, 'json' => ['models' => [['name' => 'llama-alpha:latest']]]],
+];
+foreach ($modelListCases as $provider => $case) {
+	$test('model listing request and filtering: ' . $provider, static function () use ($assert, $provider, $case): void {
+		$captured = null;
+		$client = new ProviderClient(null, static function (string $url, array $headers, int $timeout, int $connectTimeout) use (&$captured, $case): array {
+			$captured = ['url' => $url, 'headers' => $headers, 'timeout' => $timeout, 'connect' => $connectTimeout];
+			return ['status' => 200, 'body' => json_encode($case['json'], JSON_THROW_ON_ERROR)];
+		});
+		$models = $client->listModels([
+			'provider' => $provider,
+			'api_url' => Settings::DEFAULT_URLS[$provider],
+			'api_key' => $provider === 'ollama' ? '' : 'model-list-key',
+		]);
+		$assert(str_ends_with($captured['url'], $case['endpoint']));
+		$assert($captured['timeout'] === 30 && $captured['connect'] === 8);
+		$assert(!str_contains($captured['url'], 'model-list-key'));
+		if ($case['header'] !== null) $assert(isset($captured['headers'][$case['header']]));
+		$assert(count($models) > 0);
+		if ($provider === 'gemini') $assert($models === ['gemini-alpha']);
+	});
+}
+
 $test('missing provider key prevents any provider request', static function () use ($throws): void {
 	$called = false;
-	$client = new ProviderClient(static function () use (&$called): array { $called = true; return ['status' => 200, 'body' => '{}']; });
+	$modelListCalled = false;
+	$client = new ProviderClient(
+		static function () use (&$called): array { $called = true; return ['status' => 200, 'body' => '{}']; },
+		static function () use (&$modelListCalled): array { $modelListCalled = true; return ['status' => 200, 'body' => '{}']; }
+	);
 	$throws(static fn () => $client->summarize(['provider' => 'openai', 'model' => 'gpt-test', 'api_url' => Settings::DEFAULT_URLS['openai'], 'prompt' => '', 'api_key' => ''], 'article'));
+	$throws(static fn () => $client->listModels(['provider' => 'openai', 'api_url' => Settings::DEFAULT_URLS['openai'], 'api_key' => '']));
 	if ($called) throw new RuntimeException('provider was contacted without a key');
+	if ($modelListCalled) throw new RuntimeException('model list endpoint was contacted without a key');
 });
 
 $test('provider error bodies are never returned to the caller', static function () use ($assert, $throws): void {
@@ -203,6 +282,8 @@ $test('controller rejects missing auth, CSRF, POST, and invalid IDs before looku
 		'wrong-method' => ['get', 405],
 		'invalid-id' => ['invalid-id', 400],
 		'missing-entry' => ['valid', 404],
+		'model-wrong-method' => ['models-get', 405],
+		'model-bad-csrf' => ['models-bad-csrf', 403],
 	];
 	foreach ($cases as $name => [$scenario, $expectedStatus]) {
 		$command = [PHP_BINARY, __DIR__ . '/controller-case.php', $scenario];

@@ -44,6 +44,53 @@ final class Settings {
 		return $submitted === '' ? $existing : $submitted;
 	}
 
+	public static function configurationApiKey(string $oldProvider, string $oldUrl, string $newProvider, string $newUrl, string $existing, string $submitted, bool $clear): string {
+		if ($submitted !== '' || $clear) {
+			return self::updateApiKey($existing, $submitted, $clear);
+		}
+		if ($oldProvider !== $newProvider) {
+			return '';
+		}
+		try {
+			$oldUrl = ProviderClient::normalizeApiUrl($oldProvider, $oldUrl);
+		} catch (\InvalidArgumentException) {
+			return '';
+		}
+		return $oldUrl === $newUrl ? self::updateApiKey($existing, '', false) : '';
+	}
+
+	/** @return array{provider:string,api_url:string,api_key:string} */
+	public static function validateModelLookup(string $provider, string $apiUrl, string $apiKey): array {
+		if (!isset(self::DEFAULT_URLS[$provider])) {
+			throw new \InvalidArgumentException('Select a supported provider.');
+		}
+		$apiKey = self::updateApiKey('', $apiKey, false);
+		return [
+			'provider' => $provider,
+			'api_url' => ProviderClient::normalizeApiUrl($provider, $apiUrl),
+			'api_key' => $apiKey,
+		];
+	}
+
+	public static function modelLookupKey(string $provider, string $apiUrl, string $submittedKey, string $savedProvider, string $savedApiUrl, string $savedKey): string {
+		$submittedKey = self::updateApiKey('', $submittedKey, false);
+		if ($provider === 'ollama') {
+			return '';
+		}
+		if ($submittedKey !== '' || $provider !== $savedProvider) {
+			return $submittedKey;
+		}
+		try {
+			$savedApiUrl = ProviderClient::normalizeApiUrl($savedProvider, $savedApiUrl);
+		} catch (\InvalidArgumentException) {
+			return '';
+		}
+		if ($apiUrl !== $savedApiUrl) {
+			return '';
+		}
+		return self::updateApiKey('', $savedKey, false);
+	}
+
 	public static function prompt(string $prompt): string {
 		return trim($prompt) === '' ? self::DEFAULT_PROMPT : $prompt;
 	}

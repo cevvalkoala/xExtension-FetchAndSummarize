@@ -17,10 +17,16 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 	public function jsVars(array $vars): array {
 		$vars['fetch_and_summarize'] = [
 			'url' => Minz_Url::display(['c' => 'FetchAndSummarize', 'a' => 'summarize']),
+			'modelsUrl' => Minz_Url::display(['c' => 'FetchAndSummarize', 'a' => 'models']),
 			'i18n' => [
 				'button' => _t('ext.fetch_and_summarize.button'),
 				'loading' => _t('ext.fetch_and_summarize.loading'),
 				'error' => _t('ext.fetch_and_summarize.error'),
+				'loadModels' => _t('ext.fetch_and_summarize.configure.load_models'),
+				'loadingModels' => _t('ext.fetch_and_summarize.configure.loading_models'),
+				'modelsLoaded' => _t('ext.fetch_and_summarize.configure.models_loaded'),
+				'noModels' => _t('ext.fetch_and_summarize.configure.no_models'),
+				'modelsError' => _t('ext.fetch_and_summarize.configure.models_error'),
 			],
 		];
 		return $vars;
@@ -47,20 +53,38 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 
 		try {
 			$config = FetchAndSummarize\Settings::validate($provider, $model, $apiUrl, $prompt);
-			$updatedKey = FetchAndSummarize\Settings::updateApiKey($this->getSetting('api_key'), $key, $clearKey);
+			$oldProvider = $this->getSetting('provider', 'openai');
+			$oldApiUrl = $this->getSetting('api_url', FetchAndSummarize\Settings::DEFAULT_URLS[$oldProvider] ?? '');
+			$updatedKey = FetchAndSummarize\Settings::configurationApiKey(
+				$oldProvider,
+				$oldApiUrl,
+				$provider,
+				$config['api_url'],
+				$this->getSetting('api_key'),
+				$key,
+				$clearKey
+			);
 		} catch (InvalidArgumentException $e) {
 			Minz_Request::setBadNotification($e->getMessage());
 			return;
 		}
 
-		foreach ($config as $name => $value) {
-			$this->setUserConfigurationValue($name, $value);
+		$userConfiguration = FreshRSS_Context::userConf();
+		$extensions = $userConfiguration->extensions;
+		$current = $extensions[$this->getName()] ?? [];
+		if (!is_array($current)) {
+			$current = [];
 		}
-		$this->setUserConfigurationValue('api_key', $updatedKey);
+		$extensions[$this->getName()] = array_merge($current, $config, ['api_key' => $updatedKey]);
+		$userConfiguration->_attribute('extensions', $extensions);
+		$userConfiguration->save();
 		Minz_Request::setGoodNotification(_t('ext.fetch_and_summarize.saved'));
 	}
 
 	public function getSetting(string $key, string $default = ''): string {
-		return $this->getUserConfigurationString($key) ?? $default;
+		$extensions = FreshRSS_Context::userConf()->extensions;
+		$configuration = $extensions[$this->getName()] ?? [];
+		$value = is_array($configuration) ? ($configuration[$key] ?? null) : null;
+		return is_string($value) ? $value : $default;
 	}
 }

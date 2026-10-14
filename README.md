@@ -31,13 +31,13 @@ The API URL is a base URL; the extension adds the provider endpoint. HTTPS is re
 | OpenRouter | `https://openrouter.ai/api/v1` | `/chat/completions` | `openai/gpt-4o-mini` | Required |
 | Ollama | `http://127.0.0.1:11435` | `/api/chat` | `llama3.2` | Not used |
 
-Use a provider-supported model name and a key with the provider's required permissions. For Ollama, the model must already be installed on the Ollama server. Ollama's default API port is commonly `11434`; this extension uses the planned example `11435`, so set the base URL to the port actually configured on your host. A typical same-host endpoint is `http://127.0.0.1:11435`.
+Use **Load models** after choosing the provider and entering its API key to request model names. Keys are sent from the browser only to this FreshRSS server and are used server-side for the provider request; model lookup does not save them. The model field remains editable for custom or unavailable model names. For Ollama, the model must already be installed on the Ollama server. Ollama's default API port is commonly `11434`; this extension uses the planned example `11435`, so set the base URL to the port actually configured on your host. A typical same-host endpoint is `http://127.0.0.1:11435`.
 
 When FreshRSS runs in a container, `127.0.0.1` addresses that container, not the Docker host. Configure the API URL to a service name or host address reachable from the FreshRSS container, and restrict that network path. Do not expose Ollama's unauthenticated API to an untrusted network.
 
 ## Configuration and privacy
 
-Provider, model, API URL, prompt, and key are stored in the current user's FreshRSS configuration. The key field is always blank after saving; leaving it blank preserves the saved key, while **Clear the saved API key** removes it. FreshRSS user configuration is server-side, so protect the data directory with host filesystem permissions and include it in appropriately protected backups. Use HTTPS for FreshRSS and handle backup files as secrets.
+Provider, model, API URL, prompt, and key are stored in the current user's FreshRSS configuration. The key field is always blank after saving; leaving it blank preserves the saved key only while the provider and API URL remain unchanged. Changing provider or URL clears the old key to prevent forwarding it to another endpoint. **Clear the saved API key** removes it explicitly. FreshRSS user configuration is server-side, so protect the data directory with host filesystem permissions and include it in appropriately protected backups. Use HTTPS for FreshRSS and handle backup files as secrets.
 
 With hosted providers, extracted article text and the custom prompt are sent to that third party. Ollama can keep model processing on your own server, subject to its network configuration. Review each provider's privacy terms before use.
 
