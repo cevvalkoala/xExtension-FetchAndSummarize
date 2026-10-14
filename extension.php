@@ -7,7 +7,7 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 	public function init(): void {
 		parent::init();
 		$this->registerTranslates();
-		$this->registerController('FetchAndSummarize');
+		$this->registerController('fetchAndSummarize');
 		$this->registerHook('js_vars', [$this, 'jsVars']);
 		Minz_View::appendStyle($this->getFileUrl('fetchandsummarize.css'));
 		Minz_View::appendScript($this->getFileUrl('fetchandsummarize.js'), cond: false, defer: true, async: false);
@@ -16,8 +16,8 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 	/** @param array<string,mixed> $vars @return array<string,mixed> */
 	public function jsVars(array $vars): array {
 		$vars['fetch_and_summarize'] = [
-			'url' => Minz_Url::display(['c' => 'FetchAndSummarize', 'a' => 'summarize']),
-			'modelsUrl' => Minz_Url::display(['c' => 'FetchAndSummarize', 'a' => 'models']),
+			'url' => Minz_Url::display(['c' => 'fetchAndSummarize', 'a' => 'summarize']),
+			'modelsUrl' => Minz_Url::display(['c' => 'fetchAndSummarize', 'a' => 'models']),
 			'i18n' => [
 				'button' => _t('ext.fetch_and_summarize.button'),
 				'loading' => _t('ext.fetch_and_summarize.loading'),

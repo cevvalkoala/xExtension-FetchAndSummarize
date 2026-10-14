@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 
-final class FreshExtension_FetchAndSummarize_Controller extends Minz_ActionController {
+final class FreshExtension_fetchAndSummarize_Controller extends Minz_ActionController {
 	private ?FetchAndSummarizeExtension $extension = null;
 
 	public function init(): void {
@@ -81,12 +81,13 @@ final class FreshExtension_FetchAndSummarize_Controller extends Minz_ActionContr
 				trim(Minz_Request::paramString('api_url', plaintext: true)),
 				$submittedKey
 			);
+			$savedProvider = $this->extension->getSetting('provider', 'openai');
 			$lookup['api_key'] = FetchAndSummarize\Settings::modelLookupKey(
 				$lookup['provider'],
 				$lookup['api_url'],
 				$lookup['api_key'],
-				$this->extension->getSetting('provider', 'openai'),
-				$this->extension->getSetting('api_url', FetchAndSummarize\Settings::DEFAULT_URLS[$this->extension->getSetting('provider', 'openai')] ?? ''),
+				$savedProvider,
+				$this->extension->getSetting('api_url', FetchAndSummarize\Settings::DEFAULT_URLS[$savedProvider] ?? ''),
 				$this->extension->getSetting('api_key')
 			);
 			if ($provider !== 'ollama' && trim($lookup['api_key']) === '') {

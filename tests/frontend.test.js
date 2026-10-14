@@ -92,7 +92,19 @@ modelControl.value = options[0].dataset.model;
 const loadModelsButton = new Element('button');
 const modelList = new Element('datalist');
 const modelStatus = new Element('p');
+const csrfControl = new Element('input');
+csrfControl.value = 'csrf-test';
+const configureForm = new Element('form');
+configureForm.dataset = {
+	modelsUrl: '/?c=fetchAndSummarize&a=models',
+	loadLabel: 'Load models',
+	loadingLabel: 'Loading models...',
+	loadedLabel: 'Loaded {count} models.',
+	emptyLabel: 'No models.',
+	errorLabel: 'Model list error.',
+};
 const controls = new Map([
+	['fas-configure', configureForm],
 	['fas-provider', providerControl],
 	['fas-api-url', urlControl],
 	['fas-api-key', keyControl],
@@ -100,6 +112,7 @@ const controls = new Map([
 	['fas-load-models', loadModelsButton],
 	['fas-model-list', modelList],
 	['fas-model-status', modelStatus],
+	['fas-csrf', csrfControl],
 ]);
 const allElements = () => {
 	const result = [];
@@ -109,13 +122,13 @@ const allElements = () => {
 };
 
 global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
-	url: '/?c=FetchAndSummarize&a=summarize',
+	url: '/?c=fetchAndSummarize&a=summarize',
 i18n: {
 		button: 'Fetch and Summarize', loading: 'Loading...', error: 'Could not summarize.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
 		noModels: 'No models.', modelsError: 'Model list error.',
 	},
-modelsUrl: '/?c=FetchAndSummarize&a=models',
+modelsUrl: '/?c=fetchAndSummarize&a=models',
 } } } };
 global.document = {
 	body: { addEventListener: (name, handler) => bodyHandlers.set(name, handler) },
@@ -129,7 +142,7 @@ let requests = 0;
 let modelRequests = 0;
 let completeFirst;
 global.fetch = (url, options) => {
-	if (url === '/?c=FetchAndSummarize&a=models') {
+	if (url === '/?c=fetchAndSummarize&a=models') {
 		modelRequests++;
 		assert.equal(options.method, 'POST');
 		assert.equal(options.credentials, 'same-origin');
@@ -141,17 +154,19 @@ global.fetch = (url, options) => {
 		return Promise.resolve({ ok: true, json: async () => ({ models: ['gemini-flash', 'gemini-pro'] }) });
 	}
 	requests++;
-	assert.equal(url, '/?c=FetchAndSummarize&a=summarize');
+	assert.equal(url, '/?c=fetchAndSummarize&a=summarize');
 	assert.equal(options.method, 'POST');
 	assert.equal(options.credentials, 'same-origin');
 	assert.equal(options.headers['Content-Type'], 'application/x-www-form-urlencoded; charset=UTF-8');
 	assert.equal(new URLSearchParams(options.body).get('_csrf'), 'csrf-test');
 	const id = new URLSearchParams(options.body).get('id');
 	if (id === '101') return new Promise((resolve) => { completeFirst = resolve; });
+	if (id === '303') return Promise.resolve({ ok: false, status: 404, json: async () => { throw new SyntaxError('HTML error page'); } });
 	return Promise.resolve({ ok: false, json: async () => ({ error: 'The article target was rejected.' }) });
 };
 
 require(path.join(__dirname, '..', 'static', 'fetchandsummarize.js'));
+require(path.join(__dirname, '..', 'static', 'fetchandsummarize-configure.js'));
 
 async function run() {
 	const providerChange = providerControl.listeners.get('change');
@@ -182,6 +197,7 @@ async function run() {
 	assert.equal(window.context.extensions.fetch_and_summarize.api_key, undefined, 'keys must not be injected into global context');
 	const configure = fs.readFileSync(path.join(__dirname, '..', 'configure.phtml'), 'utf8');
 	assert.ok(configure.indexOf('name="api_key"') < configure.indexOf('name="model"'), 'API key control should precede model selection');
+	assert.match(configure, /fetchandsummarize-configure\.js/, 'the configuration script should be loaded by its own view');
 
 	const button101 = entries[0].querySelector('.fetchandsummarize-button');
 	const button202 = entries[1].querySelector('.fetchandsummarize-button');
@@ -212,6 +228,8 @@ async function run() {
 	entries.push(new Entry('flux_303'));
 	bodyHandlers.get('freshrss:load-more')();
 	assert.ok(entries[2].querySelector('.fetchandsummarize-button'), 'load-more entries should receive a control');
+	await click({ target: entries[2].querySelector('.fetchandsummarize-button'), preventDefault() {} });
+	assert.match(document.getElementById('fetchandsummarize-result-303').textContent, /non-JSON summary response \(HTTP 404\)/);
 
 	const css = fs.readFileSync(path.join(__dirname, '..', 'static', 'fetchandsummarize.css'), 'utf8');
 	assert.match(css, /@media\s*\(max-width:\s*600px\)/, 'mobile layout rules should be present');

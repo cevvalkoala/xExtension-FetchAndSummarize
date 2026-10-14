@@ -309,6 +309,10 @@ $test('publishable metadata and all pinned dependency licenses are present', sta
 	$metadata = json_decode((string)file_get_contents($root . '/metadata.json'), true, 512, JSON_THROW_ON_ERROR);
 	$dependencies = json_decode((string)file_get_contents($root . '/vendor/dependencies.json'), true, 512, JSON_THROW_ON_ERROR);
 	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'AGPL-3.0-or-later');
+	$extension = (string)file_get_contents($root . '/extension.php');
+	$controller = (string)file_get_contents($root . '/Controllers/fetchAndSummarizeController.php');
+	$assert(str_contains($extension, "registerController('fetchAndSummarize')"));
+	$assert(str_contains($controller, 'class FreshExtension_fetchAndSummarize_Controller'));
 	$licensePaths = [
 		'fivefilters/readability.php' => 'vendor/fivefilters/readability.php/LICENSE',
 		'masterminds/html5' => 'vendor/masterminds/html5/LICENSE.txt',
