@@ -77,7 +77,8 @@
 				throw new Error(`FreshRSS returned a non-JSON summary response (HTTP ${response.status}). Reload the page and verify the extension is enabled.`);
 			}
 			if (!response.ok) throw new Error(data.error || settings.i18n.error);
-			result.textContent = data.summary;
+			const sourceLine = data.source === 'feed' ? settings.i18n.summaryFeed : settings.i18n.summaryArticle;
+			result.textContent = `${sourceLine}\n\n${data.summary}`;
 			result.classList.add('fetchandsummarize-summary');
 		} catch (error) {
 			result.setAttribute('role', 'alert');

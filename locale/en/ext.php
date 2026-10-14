@@ -6,6 +6,8 @@ return [
 		'button' => 'Fetch and Summarize',
 		'loading' => 'Fetching article and creating summary...',
 		'error' => 'The summary could not be created. Check the extension settings and try again.',
+		'summary_source_feed' => 'Summary source: text provided in the feed item.',
+		'summary_source_article' => 'Summary source: article fetched from the publisher\'s server.',
 		'saved' => 'Fetch and Summarize settings saved.',
 		'configure' => [
 			'title' => 'Fetch and Summarize',

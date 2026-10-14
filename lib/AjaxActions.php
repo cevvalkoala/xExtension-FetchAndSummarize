@@ -89,7 +89,10 @@ final class AjaxActions {
 					throw $fetchError;
 				}
 			}
-			self::respond(200, ['summary' => (new ProviderClient())->summarize($config, $text, $feedExcerpt)]);
+			self::respond(200, [
+				'summary' => (new ProviderClient())->summarize($config, $text, $feedExcerpt),
+				'source' => $feedExcerpt ? 'feed' : 'article',
+			]);
 		} catch (\InvalidArgumentException $e) {
 			self::respond(400, ['error' => $e->getMessage()]);
 		} catch (\Throwable $e) {

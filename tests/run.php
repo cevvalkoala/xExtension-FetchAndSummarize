@@ -139,7 +139,7 @@ $test('feed fallback text is cleaned and bounded like article text', static func
 });
 
 $test('default prompt is exact and custom prompt remains verbatim', static function () use ($assert): void {
-	$assert(Settings::prompt('') === 'Fetch the article from the link. If the content is shorter than 400 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.');
+	$assert(Settings::prompt('') === 'Fetch the article from the link. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.');
 	$custom = "  Summarize in two bullets.\nKeep names unchanged.  ";
 	$assert(Settings::prompt($custom) === $custom);
 });

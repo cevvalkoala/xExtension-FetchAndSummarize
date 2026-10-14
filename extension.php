@@ -22,6 +22,8 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 				'button' => _t('ext.fetch_and_summarize.button'),
 				'loading' => _t('ext.fetch_and_summarize.loading'),
 				'error' => _t('ext.fetch_and_summarize.error'),
+				'summaryFeed' => _t('ext.fetch_and_summarize.summary_source_feed'),
+				'summaryArticle' => _t('ext.fetch_and_summarize.summary_source_article'),
 				'loadModels' => _t('ext.fetch_and_summarize.configure.load_models'),
 				'loadingModels' => _t('ext.fetch_and_summarize.configure.loading_models'),
 				'modelsLoaded' => _t('ext.fetch_and_summarize.configure.models_loaded'),

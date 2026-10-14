@@ -146,6 +146,8 @@ global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summariz
 	url: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=summarize',
 i18n: {
 		button: 'Fetch and Summarize', loading: 'Loading...', error: 'Could not summarize.',
+		summaryFeed: 'Summary source: text provided in the feed item.',
+		summaryArticle: 'Summary source: article fetched from the publisher\'s server.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
 		noModels: 'No models.', modelsError: 'Model list error.',
 	},
@@ -183,6 +185,7 @@ global.fetch = (url, options) => {
 	const id = new URLSearchParams(options.body).get('id');
 	if (id === '101') return new Promise((resolve) => { completeFirst = resolve; });
 	if (id === '303') return Promise.resolve({ ok: false, status: 404, json: async () => { throw new SyntaxError('HTML error page'); } });
+	if (id === '404') return Promise.resolve({ ok: true, json: async () => ({ source: 'feed', summary: 'RSS excerpt summary' }) });
 	return Promise.resolve({ ok: false, json: async () => ({ error: 'The article target was rejected.' }) });
 };
 
@@ -237,10 +240,10 @@ async function run() {
 	assert.equal(requests, 1, 'a duplicate click must not start a second request');
 	assert.equal(button101.disabled, true, 'button should be disabled while its request is active');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').textContent, 'Loading...');
-	completeFirst({ ok: true, json: async () => ({ summary: '<img src=x onerror=alert(1)> plain text' }) });
+	completeFirst({ ok: true, json: async () => ({ source: 'article', summary: '<img src=x onerror=alert(1)> plain text' }) });
 	await Promise.all([firstClick, duplicateClick]);
 	const summary = document.getElementById('fetchandsummarize-result-101');
-	assert.equal(summary.textContent, '<img src=x onerror=alert(1)> plain text', 'model output must remain plain text');
+	assert.equal(summary.textContent, 'Summary source: article fetched from the publisher\'s server.\n\n<img src=x onerror=alert(1)> plain text', 'article source must be shown before plain-text model output');
 	assert.equal(summary.children.length, 0, 'model output must never create HTML nodes');
 	assert.equal(button101.disabled, false);
 
@@ -254,6 +257,10 @@ async function run() {
 	assert.ok(entries[2].querySelector('.fetchandsummarize-button'), 'load-more entries should receive a control');
 	await click({ target: entries[2].querySelector('.fetchandsummarize-button'), preventDefault() {} });
 	assert.match(document.getElementById('fetchandsummarize-result-303').textContent, /non-JSON summary response \(HTTP 404\)/);
+	entries.push(new Entry('flux_404'));
+	bodyHandlers.get('freshrss:load-more')();
+	await click({ target: entries[3].querySelector('.fetchandsummarize-button'), preventDefault() {} });
+	assert.equal(document.getElementById('fetchandsummarize-result-404').textContent, 'Summary source: text provided in the feed item.\n\nRSS excerpt summary');
 
 	const css = fs.readFileSync(path.join(__dirname, '..', 'static', 'fetchandsummarize.css'), 'utf8');
 	assert.match(css, /@media\s*\(max-width:\s*600px\)/, 'mobile layout rules should be present');
