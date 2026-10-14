@@ -113,6 +113,12 @@ $test('redirect limit and non-HTML response checks are enforced', static functio
 		static fn (string $url, array $addresses): array => ['status' => 200, 'headers' => ['content-type' => 'application/pdf'], 'body' => 'pdf', 'primary_ip' => $addresses[0]]
 	);
 	$throws(static fn () => $nonHtml->fetch('https://news.example/document'));
+	$blocked = new ArticleFetcher(
+		static fn (): array => ['8.8.8.8'],
+		static fn (string $url, array $addresses): array => ['status' => 403, 'headers' => ['content-type' => 'text/html'], 'body' => 'blocked', 'primary_ip' => $addresses[0]]
+	);
+	$blockedError = $throws(static fn () => $blocked->fetch('https://news.example/blocked'));
+	$assert(str_contains($blockedError->getMessage(), 'HTTP 403'));
 });
 
 $test('Readability extracts text and strips page noise', static function () use ($assert): void {
@@ -124,6 +130,12 @@ $test('Readability extracts text and strips page noise', static function () use 
 
 $test('empty extraction is rejected', static function () use ($throws): void {
 	$throws(static fn () => (new ArticleExtractor())->extract('<html><body></body></html>', 'https://news.example/'));
+});
+
+$test('feed fallback text is cleaned and bounded like article text', static function () use ($assert): void {
+	$text = (new ArticleExtractor())->extractFeedContent('<p>Useful feed-provided article excerpt.</p><script>secretInjectedText()</script><style>.hidden {}</style>');
+	$assert(str_contains($text, 'Useful feed-provided article excerpt'));
+	$assert(!str_contains($text, 'secretInjectedText') && !str_contains($text, '.hidden'));
 });
 
 $test('default prompt is exact and custom prompt remains verbatim', static function () use ($assert): void {
@@ -273,6 +285,18 @@ $test('provider error bodies are never returned to the caller', static function 
 	$client = new ProviderClient(static fn (): array => ['status' => 401, 'body' => $secret]);
 	$error = $throws(static fn () => $client->summarize(['provider' => 'openai', 'model' => 'gpt-test', 'api_url' => Settings::DEFAULT_URLS['openai'], 'prompt' => '', 'api_key' => 'private-key'], 'article'));
 	$assert(!str_contains($error->getMessage(), $secret) && !str_contains($error->getMessage(), 'private-key'));
+});
+
+$test('RSS fallback is explicitly identified as potentially incomplete to the model', static function () use ($assert): void {
+	$payload = null;
+	$client = new ProviderClient(static function (string $url, array $headers, string $json) use (&$payload): array {
+		$payload = json_decode($json, true);
+		return ['status' => 200, 'body' => '{"choices":[{"message":{"content":"excerpt summary"}}]}'];
+	});
+	$client->summarize(['provider' => 'openai', 'model' => 'gpt-test', 'api_url' => Settings::DEFAULT_URLS['openai'], 'prompt' => 'Summarize briefly.', 'api_key' => 'test-key'], 'RSS excerpt text', true);
+	$encoded = json_encode($payload, JSON_THROW_ON_ERROR);
+	$assert(str_contains($encoded, 'RSS feed-provided content'));
+	$assert(str_contains($encoded, 'may be an excerpt rather than the complete article'));
 });
 
 $test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid IDs', static function () use ($assert): void {

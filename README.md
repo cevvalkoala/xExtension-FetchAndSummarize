@@ -1,6 +1,6 @@
 # Fetch and Summarize
 
-A per-user FreshRSS extension that fetches each article's original web page, extracts its main text with Readability, and requests an AI summary. It does not save article HTML, extracted text, or summaries. Summaries are rendered as plain text in the article stream.
+A per-user FreshRSS extension that fetches each article's original web page, extracts its main text with Readability, and requests an AI summary. If a publisher blocks server-side fetching, the extension can fall back to the text included in the FreshRSS feed entry; this may be only an excerpt. It does not save article HTML, extracted text, or summaries. Summaries are rendered as plain text in the article stream.
 
 ## Requirements
 
@@ -45,7 +45,7 @@ Article fetching is restricted to HTTP(S) public-routable destinations. Every re
 
 Custom provider URLs, especially Ollama URLs, are server-side network destinations. Only trusted FreshRSS users should be permitted to configure them. On multi-user installations, restrict who can enable/configure this extension and apply outbound firewall controls; per-user settings alone do not make custom endpoints safe for untrusted users.
 
-Fetched pages and model responses are treated as untrusted data. The extracted article is sent as plain text with an explicit untrusted-data instruction, and model output is inserted with text-only DOM APIs. Content is not persisted by the extension. JavaScript-rendered, paywalled, or otherwise inaccessible pages may not yield article text.
+Fetched pages, feed excerpts, and model responses are treated as untrusted data. Article or feed text is sent as plain text with an explicit untrusted-data instruction; feed-provided text is identified to the model as potentially incomplete. Model output is inserted with text-only DOM APIs. Content is not persisted by the extension. JavaScript-rendered, paywalled, anti-bot-protected, or otherwise inaccessible pages may only provide the shorter text available in the feed, or may not yield usable text at all.
 
 ## Timeouts and limits
 

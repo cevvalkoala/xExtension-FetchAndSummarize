@@ -49,7 +49,13 @@ final class ArticleFetcher {
 				continue;
 			}
 			if ($status < 200 || $status >= 300) {
-				throw new \RuntimeException('The article server returned an unsuccessful response.');
+				if ($status === 401 || $status === 403) {
+					throw new \RuntimeException("The publisher refused the article request (HTTP {$status}). The site may block server-side readers.");
+				}
+				if ($status === 429) {
+					throw new \RuntimeException('The publisher rate-limited the article request (HTTP 429). Try again later.');
+				}
+				throw new \RuntimeException("The article server returned an unsuccessful response (HTTP {$status}).");
 			}
 			$type = strtolower(trim(explode(';', $response['headers']['content-type'] ?? '')[0]));
 			if (!in_array($type, ['text/html', 'application/xhtml+xml'], true)) {
@@ -156,8 +162,13 @@ final class ArticleFetcher {
 			CURLOPT_PROXY => '',
 			CURLOPT_SSL_VERIFYPEER => true,
 			CURLOPT_SSL_VERIFYHOST => 2,
-			CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml;q=0.9', 'Accept-Encoding: identity'],
-			CURLOPT_USERAGENT => 'FreshRSS-FetchAndSummarize/1.0 (+server-side article fetch)',
+			CURLOPT_HTTPHEADER => [
+				'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+				'Accept-Language: en-US,en;q=0.8',
+				'Accept-Encoding: identity',
+				'Upgrade-Insecure-Requests: 1',
+			],
+			CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
 			CURLOPT_HEADERFUNCTION => static function ($curl, string $line) use (&$headers): int {
 				$length = strlen($line);
 				if (preg_match('/^([A-Za-z0-9-]+):\s*(.*?)\s*$/', $line, $m)) {

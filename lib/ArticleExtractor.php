@@ -33,12 +33,29 @@ final class ArticleExtractor {
 		if (!is_string($content) || $content === '') {
 			throw new \RuntimeException('No readable article content was found.');
 		}
+		return $this->htmlToText($content);
+	}
 
+	public function extractFeedContent(string $html): string {
+		if ($html === '' || strlen($html) > self::MAX_HTML_BYTES) {
+			throw new \RuntimeException('The feed did not include usable article text.');
+		}
+		return $this->htmlToText($html);
+	}
+
+	private function htmlToText(string $html): string {
 		$document = new \DOMDocument('1.0', 'UTF-8');
 		$previous = libxml_use_internal_errors(true);
 		try {
-			if (!$document->loadHTML('<?xml encoding="UTF-8">' . $content, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+			if (!$document->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
 				throw new \RuntimeException('The article content could not be converted to text.');
+			}
+			foreach (['script', 'style', 'noscript', 'template', 'iframe'] as $tag) {
+				$nodes = $document->getElementsByTagName($tag);
+				for ($i = $nodes->length - 1; $i >= 0; $i--) {
+					$node = $nodes->item($i);
+					$node?->parentNode?->removeChild($node);
+				}
 			}
 			$text = $document->textContent;
 		} finally {
@@ -48,7 +65,7 @@ final class ArticleExtractor {
 		$text = preg_replace('/[\p{Z}\s]+/u', ' ', $text) ?? '';
 		$text = trim($text);
 		if ($text === '') {
-			throw new \RuntimeException('The page did not contain extractable article text.');
+			throw new \RuntimeException('The page or feed did not contain extractable article text.');
 		}
 		if (strlen($text) > self::MAX_TEXT_BYTES) {
 			$text = self::truncateUtf8($text, self::MAX_TEXT_BYTES);

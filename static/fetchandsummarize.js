@@ -34,7 +34,17 @@
 			result.id = `fetchandsummarize-result-${button.dataset.entryId}`;
 			result.setAttribute('aria-live', 'polite');
 			result.setAttribute('role', 'status');
-			entry.append(result);
+			const articleText = entry.querySelector('.flux_content .content > .text');
+			const content = entry.querySelector('.flux_content .content');
+			if (articleText?.parentElement) {
+				articleText.parentElement.insertBefore(result, articleText);
+			} else if (content) {
+				content.prepend(result);
+			} else if (header) {
+				header.after(result);
+			} else {
+				entry.prepend(result);
+			}
 		});
 	}
 

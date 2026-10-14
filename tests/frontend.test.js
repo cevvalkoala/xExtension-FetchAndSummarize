@@ -26,6 +26,12 @@ class Element {
 		this.children.push(child);
 	}
 
+	insertBefore(child, reference) {
+		child.parentElement = this;
+		const index = this.children.indexOf(reference);
+		this.children.splice(index < 0 ? this.children.length : index, 0, child);
+	}
+
 	replaceChildren(...children) {
 		this.children = [];
 		children.forEach((child) => this.append(child));
@@ -34,6 +40,10 @@ class Element {
 	prepend(child) {
 		child.parentElement = this;
 		this.children.unshift(child);
+	}
+
+	after(sibling) {
+		if (this.parentElement) this.parentElement.insertBefore(sibling, this.parentElement.children[this.parentElement.children.indexOf(this) + 1] || null);
 	}
 
 	setAttribute(name, value) { this.attributes[name] = value; }
@@ -45,6 +55,8 @@ class Element {
 
 	querySelector(selector) {
 		if (selector === 'ul.flux_header, .flux_header') return this.header || null;
+		if (selector === '.flux_content .content > .text') return this.articleText || null;
+		if (selector === '.flux_content .content') return this.contentArea || null;
 		const className = selector.slice(1);
 		for (const child of this.children) {
 			if (child.className.includes(className)) return child;
@@ -68,6 +80,15 @@ class Entry extends Element {
 			this.header.className = 'horizontal-list flux_header';
 			this.append(this.header);
 		}
+		const fluxContent = new Element('div');
+		fluxContent.className = 'flux_content';
+		this.contentArea = new Element('div');
+		this.contentArea.className = 'content';
+		this.articleText = new Element('div');
+		this.articleText.className = 'text';
+		this.contentArea.append(this.articleText);
+		fluxContent.append(this.contentArea);
+		this.append(fluxContent);
 	}
 }
 
@@ -208,6 +229,7 @@ async function run() {
 	assert.ok(entries[1].children[0].className.includes('fetchandsummarize-toolbar'), 'entries without a standard header need a fallback toolbar');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').attributes.role, 'status');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').attributes['aria-live'], 'polite');
+	assert.equal(entries[0].contentArea.children[0].id, 'fetchandsummarize-result-101', 'summary box should precede the article text');
 
 	const click = handlers.get('click');
 	const firstClick = click({ target: button101, preventDefault() {} });

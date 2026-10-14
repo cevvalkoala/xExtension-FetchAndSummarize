@@ -76,9 +76,20 @@ final class AjaxActions {
 			if ($provider !== 'ollama' && trim($config['api_key']) === '') {
 				self::respond(400, ['error' => 'Save an API key in the extension settings before requesting a summary.']);
 			}
-			$page = (new ArticleFetcher())->fetch($entry->link());
-			$text = (new ArticleExtractor())->extract($page['html'], $page['url']);
-			self::respond(200, ['summary' => (new ProviderClient())->summarize($config, $text)]);
+			$extractor = new ArticleExtractor();
+			$feedExcerpt = false;
+			try {
+				$page = (new ArticleFetcher())->fetch($entry->link());
+				$text = $extractor->extract($page['html'], $page['url']);
+			} catch (\RuntimeException $fetchError) {
+				try {
+					$text = $extractor->extractFeedContent((string)$entry->content(false));
+					$feedExcerpt = true;
+				} catch (\RuntimeException) {
+					throw $fetchError;
+				}
+			}
+			self::respond(200, ['summary' => (new ProviderClient())->summarize($config, $text, $feedExcerpt)]);
 		} catch (\InvalidArgumentException $e) {
 			self::respond(400, ['error' => $e->getMessage()]);
 		} catch (\Throwable $e) {
