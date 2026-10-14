@@ -15,7 +15,7 @@ The extension bundles Readability 3.3.3 and its runtime dependencies; Composer i
 1. Copy this repository directory to `FreshRSS/extensions/xExtension-FetchAndSummarize/`. Keep the repository files, including `metadata.json`, at the top level of that directory.
 2. In FreshRSS, open **Administration > Extensions**, enable **FetchAndSummarize** for your user, then open its configuration.
 3. Select a provider, set the model and API URL, enter the API key if required, and save.
-4. Open the normal article stream and use **Fetch and Summarize** on an article.
+4. Open the normal article stream and use **Fetch & Summarize** on an article.
 
 The server action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. It does not accept a URL from the browser.
 

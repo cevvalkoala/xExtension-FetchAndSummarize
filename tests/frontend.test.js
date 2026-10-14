@@ -145,7 +145,7 @@ const allElements = () => {
 global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
 	url: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=summarize',
 i18n: {
-		button: 'Fetch and Summarize', loading: 'Loading...', error: 'Could not summarize.',
+		button: 'Fetch & Summarize', loading: 'Loading...', error: 'Could not summarize.',
 		summaryFeed: 'Summary source: text provided in the feed item.',
 		summaryArticle: 'Summary source: article fetched from the publisher\'s server.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
