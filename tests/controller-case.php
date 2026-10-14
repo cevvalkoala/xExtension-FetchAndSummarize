@@ -26,10 +26,10 @@ final class FreshRSS_Factory {
 	}
 }
 
-require_once dirname(__DIR__) . '/Controllers/fetchAndSummarizeController.php';
+require_once dirname(__DIR__) . '/Controllers/fetchandsummarizeController.php';
 $GLOBALS['fas_case'] = $argv[1] ?? '';
 register_shutdown_function(static function (): void { echo "\n__HTTP__" . http_response_code(); });
-$controller = new FreshExtension_fetchAndSummarize_Controller();
+$controller = new FreshExtension_fetchandsummarize_Controller();
 $controller->firstAction();
 if (str_starts_with($GLOBALS['fas_case'], 'models-')) {
 	$controller->modelsAction();

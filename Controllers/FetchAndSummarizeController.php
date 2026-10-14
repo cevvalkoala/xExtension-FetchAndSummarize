@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 
-final class FreshExtension_fetchAndSummarize_Controller extends Minz_ActionController {
+final class FreshExtension_fetchandsummarize_Controller extends Minz_ActionController {
 	private ?FetchAndSummarizeExtension $extension = null;
 
 	public function init(): void {

@@ -152,7 +152,7 @@ $test('FreshRSS configuration is saved atomically and keeps provider keys scoped
 			$settings = $data['extensions']['FetchAndSummarize'];
 			$assert($data['saved'] === true && $settings['model'] === 'new-model' && $settings['prompt'] === 'new prompt');
 			$assert($settings['api_key'] === 'saved-secret' && $settings['other'] === 'preserve-me');
-			$assert(isset($data['controllers']['fetchAndSummarize']));
+			$assert(isset($data['controllers']['fetchandsummarize']));
 		},
 		'change-provider' => static function (array $data) use ($assert): void {
 			$settings = $data['extensions']['FetchAndSummarize'];
@@ -311,9 +311,9 @@ $test('publishable metadata and all pinned dependency licenses are present', sta
 	$dependencies = json_decode((string)file_get_contents($root . '/vendor/dependencies.json'), true, 512, JSON_THROW_ON_ERROR);
 	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'AGPL-3.0-or-later');
 	$extension = (string)file_get_contents($root . '/extension.php');
-	$controller = (string)file_get_contents($root . '/Controllers/fetchAndSummarizeController.php');
-	$assert(str_contains($extension, "registerController('fetchAndSummarize')"));
-	$assert(str_contains($controller, 'class FreshExtension_fetchAndSummarize_Controller'));
+	$controller = (string)file_get_contents($root . '/Controllers/fetchandsummarizeController.php');
+	$assert(str_contains($extension, "registerController('fetchandsummarize')"));
+	$assert(str_contains($controller, 'class FreshExtension_fetchandsummarize_Controller'));
 	$licensePaths = [
 		'fivefilters/readability.php' => 'vendor/fivefilters/readability.php/LICENSE',
 		'masterminds/html5' => 'vendor/masterminds/html5/LICENSE.txt',

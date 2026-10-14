@@ -96,7 +96,7 @@ const csrfControl = new Element('input');
 csrfControl.value = 'csrf-test';
 const configureForm = new Element('form');
 configureForm.dataset = {
-	modelsUrl: '/?c=fetchAndSummarize&a=models',
+	modelsUrl: '/?c=fetchandsummarize&a=models',
 	loadLabel: 'Load models',
 	loadingLabel: 'Loading models...',
 	loadedLabel: 'Loaded {count} models.',
@@ -122,13 +122,13 @@ const allElements = () => {
 };
 
 global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
-	url: '/?c=fetchAndSummarize&a=summarize',
+	url: '/?c=fetchandsummarize&a=summarize',
 i18n: {
 		button: 'Fetch and Summarize', loading: 'Loading...', error: 'Could not summarize.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
 		noModels: 'No models.', modelsError: 'Model list error.',
 	},
-modelsUrl: '/?c=fetchAndSummarize&a=models',
+modelsUrl: '/?c=fetchandsummarize&a=models',
 } } } };
 global.document = {
 	body: { addEventListener: (name, handler) => bodyHandlers.set(name, handler) },
@@ -142,7 +142,7 @@ let requests = 0;
 let modelRequests = 0;
 let completeFirst;
 global.fetch = (url, options) => {
-	if (url === '/?c=fetchAndSummarize&a=models') {
+	if (url === '/?c=fetchandsummarize&a=models') {
 		modelRequests++;
 		assert.equal(options.method, 'POST');
 		assert.equal(options.credentials, 'same-origin');
@@ -154,7 +154,7 @@ global.fetch = (url, options) => {
 		return Promise.resolve({ ok: true, json: async () => ({ models: ['gemini-flash', 'gemini-pro'] }) });
 	}
 	requests++;
-	assert.equal(url, '/?c=fetchAndSummarize&a=summarize');
+	assert.equal(url, '/?c=fetchandsummarize&a=summarize');
 	assert.equal(options.method, 'POST');
 	assert.equal(options.credentials, 'same-origin');
 	assert.equal(options.headers['Content-Type'], 'application/x-www-form-urlencoded; charset=UTF-8');
