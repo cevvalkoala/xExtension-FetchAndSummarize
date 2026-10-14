@@ -2,6 +2,11 @@
 
 A per-user FreshRSS extension that fetches each article's original web page, extracts its main text with Readability, and requests an AI summary. If a publisher blocks server-side fetching, the extension can fall back to the text included in the FreshRSS feed entry; this may be only an excerpt. It does not save article HTML, extracted text, or summaries. Summaries are rendered as plain text in the article stream.
 
+## This extension is built completely via AI.
+I don't know much about FreshRSS extensions and I'm just a novice with PHP. So, I won't claim that I thoroughly understand how it works. But I tested it on my personal single-user FreshRSS setup for weeks without issues.
+
+I understand most people have reservations about using slopcoded applications. Still, feel free to analyze, use, debug, revise, or otherwise comment on the code. The code is yours, hoping it will make your RSS setup a bit more useful.
+
 ## Requirements
 
 - FreshRSS 1.28.2 or newer.
@@ -11,11 +16,28 @@ A per-user FreshRSS extension that fetches each article's original web page, ext
 The extension bundles Readability 3.3.3 and its runtime dependencies; Composer is not needed on the FreshRSS host.
 
 ## Installation
+Assuming you already have a running FreshRSS instance, installing the extension is just about dropping its folder into FreshRSS's `extensions/` directory and enabling it from the web UI.
 
-1. Copy this repository directory to `FreshRSS/extensions/xExtension-FetchAndSummarize/`. Keep the repository files, including `metadata.json`, at the top level of that directory.
-2. In FreshRSS, open **Administration > Extensions**, enable **FetchAndSummarize** for your user, then open its configuration.
-3. Select a provider, set the model and API URL, enter the API key if required, and save.
-4. Open the normal article stream and use **Fetch & Summarize** on an article.
+### 1. Put the files in place
+
+The goal is to have the extension's files at `<FreshRSS>/extensions/xExtension-FetchAndSummarize/`:
+
+```bash
+cd /.../FreshRSS/extensions
+# or depending on your setup, /.../FreshRSS/public/extensions
+sudo git clone https://github.com/cevvalkoala/xExtension-FetchAndSummarize
+# make sure the web server user can read it (skip if not applicable)
+sudo chown -R www-data:www-data xExtension-FetchAndSummarize
+```
+
+### 2. Enable it in FreshRSS
+
+1. Open FreshRSS → **Settings (gear) → Extensions**.
+2. Find **Fetch and Summarize** in the list and click **Enable**.
+3. Click on the gears icon next to the extension's name, to open its configuration page.
+4. Select a provider, set the API URL, enter the API key if required.
+5. Click **Load models**. The models provided by your provider (or Ollama setup) will be listed in the box. Choose the one you like. Click **Save**.
+6. Open the normal article stream and use **Fetch & Summarize** on an article.
 
 The server action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. It does not accept a URL from the browser.
 
@@ -31,7 +53,7 @@ The API URL is a base URL; the extension adds the provider endpoint. HTTPS is re
 | OpenRouter | `https://openrouter.ai/api/v1` | `/chat/completions` | `openai/gpt-4o-mini` | Required |
 | Ollama | `http://127.0.0.1:11435` | `/api/chat` | `llama3.2` | Not used |
 
-Use **Load models** after choosing the provider and entering its API key to request model names. Keys are sent from the browser only to this FreshRSS server and are used server-side for the provider request; model lookup does not save them. The model field remains editable for custom or unavailable model names. For Ollama, the model must already be installed on the Ollama server. Ollama's default API port is commonly `11434`; this extension uses the planned example `11435`, so set the base URL to the port actually configured on your host. A typical same-host endpoint is `http://127.0.0.1:11435`.
+Use **Load models** after choosing the provider and entering its API key to request model names. Keys are sent from the browser only to this FreshRSS server and are used server-side for the provider request; model lookup does not save them. The model field remains editable for custom or unavailable model names. For Ollama, the model must already be installed on the Ollama server. Ollama's default API port is commonly `11434`; this extension uses the planned example `11435`, so set the base URL to the port actually configured on your host. A typical same-host endpoint is `http://127.0.0.1:11434`.
 
 When FreshRSS runs in a container, `127.0.0.1` addresses that container, not the Docker host. Configure the API URL to a service name or host address reachable from the FreshRSS container, and restrict that network path. Do not expose Ollama's unauthenticated API to an untrusted network.
 
@@ -49,7 +71,7 @@ Fetched pages, feed excerpts, and model responses are treated as untrusted data.
 
 ## Timeouts and limits
 
-Article fetching has an 8-second connection timeout, a 45-second total budget, at most four redirects, and a 1.5 MB response cap. Extracted article text is capped at 50,000 bytes. Provider requests have an 8-second connection timeout and a 180-second total timeout, with no automatic retries. Make sure PHP's `max_execution_time`, PHP-FPM/FastCGI request timeout, and any reverse-proxy/web-server timeout allow at least four minutes plus overhead; otherwise the host may terminate the request before the provider returns.
+Article fetching has an 8-second connection timeout, a 45-second total budget, at most four redirects, and a 2 MB response cap. Extracted article text is capped at 50,000 bytes. Provider requests have an 8-second connection timeout and a 180-second total timeout, with no automatic retries. Make sure PHP's `max_execution_time`, PHP-FPM/FastCGI request timeout, and any reverse-proxy/web-server timeout allow at least four minutes plus overhead; otherwise the host may terminate the request before the provider returns.
 
 ## Development tests
 

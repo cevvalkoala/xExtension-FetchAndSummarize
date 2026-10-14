@@ -97,6 +97,20 @@ $test('article fetch accepts bounded HTML from a pinned public host', static fun
 	$assert($result['html'] === '<html>article</html>');
 });
 
+$test('article response cap is 2 MB', static function () use ($assert, $throws): void {
+	$assert(ArticleExtractor::MAX_HTML_BYTES === 2_000_000);
+	$fetcher = new ArticleFetcher(
+		static fn (): array => ['8.8.8.8'],
+		static fn (string $url, array $addresses): array => [
+			'status' => 200,
+			'headers' => ['content-type' => 'text/html'],
+			'body' => str_repeat('x', ArticleExtractor::MAX_HTML_BYTES + 1),
+			'primary_ip' => $addresses[0],
+		]
+	);
+	$throws(static fn () => $fetcher->fetch('https://news.example/large'));
+});
+
 $test('redirect limit and non-HTML response checks are enforced', static function () use ($assert, $throws): void {
 	$requests = 0;
 	$redirecting = new ArticleFetcher(

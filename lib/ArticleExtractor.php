@@ -7,7 +7,7 @@ use fivefilters\Readability\Configuration;
 use fivefilters\Readability\Readability;
 
 final class ArticleExtractor {
-	public const MAX_HTML_BYTES = 1_500_000;
+	public const MAX_HTML_BYTES = 2_000_000;
 	public const MAX_TEXT_BYTES = 50_000;
 
 	public function extract(string $html, string $url): string {
