@@ -5,6 +5,10 @@ class Minz_Extension {
 	public function handleConfigureAction(): void {}
 	public function getName(): string { return 'FetchAndSummarize'; }
 }
+final class Minz_Dispatcher {
+	public static array $registrations = [];
+	public static function registerController(string $name, string $path): void { self::$registrations[$name] = $path; }
+}
 final class FreshRSS_TestUserConfiguration {
 	public array $extensions = [
 		'FetchAndSummarize' => [
@@ -68,4 +72,5 @@ echo json_encode([
 	'saved' => $GLOBALS['fas_user_conf']->saved,
 	'extensions' => $GLOBALS['fas_user_conf']->savedExtensions,
 	'notification' => $GLOBALS['fas_notification'],
+	'controllers' => Minz_Dispatcher::$registrations,
 ], JSON_THROW_ON_ERROR);

@@ -180,8 +180,9 @@ async function run() {
 	providerControl.value = 'gemini';
 	providerControl.selectedOptions = [options[2]];
 	providerChange();
-	assert.equal(urlControl.value, 'https://custom.example/v1', 'custom API URLs should be preserved');
+	assert.equal(urlControl.value, options[2].dataset.url, 'every provider change should select that provider default');
 	assert.equal(modelControl.value, options[2].dataset.model);
+	urlControl.value = 'https://custom.example/v1';
 	keyControl.value = 'unsaved-gemini-key';
 	await loadModelsButton.listeners.get('click')();
 	assert.equal(modelRequests, 1);
@@ -192,6 +193,7 @@ async function run() {
 	providerControl.value = 'openai';
 	providerControl.selectedOptions = [options[0]];
 	providerChange();
+	assert.equal(urlControl.value, options[0].dataset.url, 'provider changes should reset editable API URL defaults');
 	assert.equal(modelControl.value, options[0].dataset.model, 'switching providers should discard previously loaded model choices');
 	assert.equal(keyControl.value, '', 'provider changes should not send a prior key to a different service');
 	assert.equal(window.context.extensions.fetch_and_summarize.api_key, undefined, 'keys must not be injected into global context');

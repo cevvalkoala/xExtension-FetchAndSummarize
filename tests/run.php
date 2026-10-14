@@ -152,6 +152,7 @@ $test('FreshRSS configuration is saved atomically and keeps provider keys scoped
 			$settings = $data['extensions']['FetchAndSummarize'];
 			$assert($data['saved'] === true && $settings['model'] === 'new-model' && $settings['prompt'] === 'new prompt');
 			$assert($settings['api_key'] === 'saved-secret' && $settings['other'] === 'preserve-me');
+			$assert(isset($data['controllers']['fetchAndSummarize']));
 		},
 		'change-provider' => static function (array $data) use ($assert): void {
 			$settings = $data['extensions']['FetchAndSummarize'];
