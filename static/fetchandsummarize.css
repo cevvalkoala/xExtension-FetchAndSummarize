@@ -1,0 +1,41 @@
+.fetchandsummarize-item {
+	white-space: nowrap;
+}
+
+.fetchandsummarize-toolbar {
+	margin-block: 0.5rem;
+}
+
+.fetchandsummarize-button {
+	max-width: 100%;
+}
+
+.fetchandsummarize-result {
+	clear: both;
+	box-sizing: border-box;
+	max-width: 100%;
+	margin: 0.75rem 0;
+	padding: 0.75rem;
+	border-inline-start: 3px solid var(--primary-color, #536b8e);
+	background: var(--background-color, rgba(127, 127, 127, 0.08));
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.fetchandsummarize-result:empty {
+	display: none;
+}
+
+@media (max-width: 600px) {
+	.fetchandsummarize-item {
+		white-space: normal;
+	}
+
+	.fetchandsummarize-button {
+		font-size: 0.9em;
+	}
+	.fetchandsummarize-result {
+		margin: 0.5rem 0;
+		padding: 0.65rem;
+	}
+}

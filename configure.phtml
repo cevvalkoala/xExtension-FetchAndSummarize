@@ -1,0 +1,73 @@
+<?php
+declare(strict_types=1);
+
+/** @var FetchAndSummarizeExtension $this */
+$provider = $this->getSetting('provider', 'openai');
+$modelDefaults = [
+	'openai' => 'gpt-4o-mini',
+	'anthropic' => 'claude-3-7-sonnet-latest',
+	'gemini' => 'gemini-2.5-flash',
+	'openrouter' => 'openai/gpt-4o-mini',
+	'ollama' => 'llama3.2',
+];
+if (!isset($modelDefaults[$provider])) {
+	$provider = 'openai';
+}
+$model = $this->getSetting('model', $modelDefaults[$provider]);
+$apiUrl = $this->getSetting('api_url', FetchAndSummarize\Settings::DEFAULT_URLS[$provider]);
+?>
+<section class="post">
+	<h3><?= _t('ext.fetch_and_summarize.configure.title') ?></h3>
+	<p><?= _t('ext.fetch_and_summarize.configure.description') ?></p>
+	<form method="post" class="fetchandsummarize-configure">
+		<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+		<div class="form-group">
+			<label for="fas-provider"><?= _t('ext.fetch_and_summarize.configure.provider') ?></label>
+			<select id="fas-provider" name="provider">
+				<?php foreach (['openai' => 'OpenAI', 'anthropic' => 'Anthropic', 'gemini' => 'Google Gemini', 'openrouter' => 'OpenRouter', 'ollama' => 'Ollama'] as $value => $label) { ?>
+				<option value="<?= $value ?>" data-url="<?= htmlspecialchars(FetchAndSummarize\Settings::DEFAULT_URLS[$value], ENT_QUOTES, 'UTF-8') ?>" data-model="<?= htmlspecialchars($modelDefaults[$value], ENT_QUOTES, 'UTF-8') ?>" <?= $provider === $value ? 'selected' : '' ?>><?= $label ?></option>
+				<?php } ?>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="fas-api-url"><?= _t('ext.fetch_and_summarize.configure.api_url') ?></label>
+			<input id="fas-api-url" name="api_url" type="url" required maxlength="2048" value="<?= htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8') ?>" />
+			<p class="help"><?= _t('ext.fetch_and_summarize.configure.api_url_help') ?></p>
+		</div>
+		<div class="form-group">
+			<label for="fas-model"><?= _t('ext.fetch_and_summarize.configure.model') ?></label>
+			<input id="fas-model" name="model" type="text" required maxlength="128" value="<?= htmlspecialchars($model, ENT_QUOTES, 'UTF-8') ?>" />
+			<p class="help"><?= _t('ext.fetch_and_summarize.configure.model_help') ?></p>
+		</div>
+		<div class="form-group">
+			<label for="fas-api-key"><?= _t('ext.fetch_and_summarize.configure.api_key') ?></label>
+			<input id="fas-api-key" name="api_key" type="password" maxlength="4096" autocomplete="new-password" value="" />
+			<p class="help"><?= _t('ext.fetch_and_summarize.configure.api_key_help') ?></p>
+			<?php if ($this->getSetting('api_key') !== '') { ?>
+			<label class="checkbox"><input type="checkbox" name="clear_api_key" value="1" /> <?= _t('ext.fetch_and_summarize.configure.clear_key') ?></label>
+			<?php } ?>
+		</div>
+		<div class="form-group">
+			<label for="fas-prompt"><?= _t('ext.fetch_and_summarize.configure.prompt') ?></label>
+			<textarea id="fas-prompt" name="prompt" rows="5" maxlength="4000" placeholder="<?= htmlspecialchars(FetchAndSummarize\Settings::DEFAULT_PROMPT, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($this->getSetting('prompt'), ENT_QUOTES, 'UTF-8') ?></textarea>
+			<p class="help"><?= _t('ext.fetch_and_summarize.configure.prompt_help') ?></p>
+		</div>
+		<div class="form-group form-actions">
+			<button class="btn btn-important" type="submit"><?= _t('ext.fetch_and_summarize.configure.save') ?></button>
+		</div>
+	</form>
+	<script>
+	(() => {
+		const provider = document.getElementById('fas-provider');
+		const url = document.getElementById('fas-api-url');
+		const model = document.getElementById('fas-model');
+		url.addEventListener('input', () => { url.dataset.edited = 'true'; });
+		model.addEventListener('input', () => { model.dataset.edited = 'true'; });
+		provider.addEventListener('change', () => {
+			const option = provider.selectedOptions[0];
+			if (url.dataset.edited !== 'true') url.value = option.dataset.url;
+			if (model.dataset.edited !== 'true') model.value = option.dataset.model;
+		});
+	})();
+	</script>
+</section>
