@@ -135,15 +135,22 @@ $test('redirect limit and non-HTML response checks are enforced', static functio
 	$assert(str_contains($blockedError->getMessage(), 'HTTP 403'));
 });
 
-$test('Readability extracts text and strips page noise', static function () use ($assert): void {
+$test('full-page extraction preserves page text and strips scripts', static function () use ($assert): void {
 	$html = '<html><head><title>News</title><script>doNotInclude()</script></head><body><nav>Noise navigation</nav><article><h1>Useful story</h1><p>This article has a substantial amount of readable text that should be extracted from the page and sent to the selected model as plain text.</p><p>A second paragraph gives the extraction enough context and keeps this test independent of any public website or network service.</p></article></body></html>';
-	$text = (new ArticleExtractor())->extract($html, 'https://news.example/story');
+	$text = (new ArticleExtractor())->extract($html);
 	$assert(str_contains($text, 'Useful story') && str_contains($text, 'second paragraph'));
-	$assert(!str_contains($text, 'doNotInclude') && !str_contains($text, 'Noise navigation'));
+	$assert(str_contains($text, 'News') && str_contains($text, 'Noise navigation'));
+	$assert(!str_contains($text, 'doNotInclude'));
 });
 
 $test('empty extraction is rejected', static function () use ($throws): void {
-	$throws(static fn () => (new ArticleExtractor())->extract('<html><body></body></html>', 'https://news.example/'));
+	$throws(static fn () => (new ArticleExtractor())->extract('<html><body></body></html>'));
+});
+
+$test('full-page extraction preserves long article text', static function () use ($assert): void {
+	$article = implode(' ', array_fill(0, 800, 'articleword'));
+	$text = (new ArticleExtractor())->extract('<html><body><main><article><p>' . $article . '</p></article></main></body></html>');
+	$assert(str_word_count($text) >= 800);
 });
 
 $test('feed fallback text is cleaned and bounded like article text', static function () use ($assert): void {
@@ -153,7 +160,7 @@ $test('feed fallback text is cleaned and bounded like article text', static func
 });
 
 $test('default prompt is exact and custom prompt remains verbatim', static function () use ($assert): void {
-	$assert(Settings::prompt('') === 'Fetch the article from the link. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.');
+	$assert(Settings::prompt('') === 'Fetch the article from the link. Analyze the article page and disregard unrelated things from the source. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.');
 	$custom = "  Summarize in two bullets.\nKeep names unchanged.  ";
 	$assert(Settings::prompt($custom) === $custom);
 });
@@ -343,10 +350,9 @@ $test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid 
 	}
 });
 
-$test('publishable metadata and all pinned dependency licenses are present', static function () use ($assert): void {
+$test('metadata and runtime have no parser vendor bundle', static function () use ($assert): void {
 	$root = dirname(__DIR__);
 	$metadata = json_decode((string)file_get_contents($root . '/metadata.json'), true, 512, JSON_THROW_ON_ERROR);
-	$dependencies = json_decode((string)file_get_contents($root . '/vendor/dependencies.json'), true, 512, JSON_THROW_ON_ERROR);
 	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'AGPL-3.0-or-later');
 	$extension = (string)file_get_contents($root . '/extension.php');
 	$ajax = (string)file_get_contents($root . '/lib/AjaxActions.php');
@@ -356,19 +362,7 @@ $test('publishable metadata and all pinned dependency licenses are present', sta
 	$assert(str_contains($extension, "'fas_action' => 'summarize'"));
 	$assert(str_contains($extension, "'fas_action' => 'models'"));
 	$assert(str_contains($ajax, "if (\$action === 'models')"));
-	$licensePaths = [
-		'fivefilters/readability.php' => 'vendor/fivefilters/readability.php/LICENSE',
-		'masterminds/html5' => 'vendor/masterminds/html5/LICENSE.txt',
-		'league/uri' => 'vendor/league/uri/LICENSE',
-		'league/uri-interfaces' => 'vendor/league/uri-interfaces/LICENSE',
-		'psr/http-factory' => 'vendor/psr/http-factory/LICENSE',
-		'psr/http-message' => 'vendor/psr/http-message/LICENSE',
-		'psr/log' => 'vendor/psr/log/LICENSE',
-	];
-	foreach ($licensePaths as $package => $path) {
-		$assert(isset($dependencies['packages'][$package]), 'missing pinned package ' . $package);
-		$assert(is_file($root . '/' . $path), 'missing bundled license for ' . $package);
-	}
+	$assert(!is_dir($root . '/vendor') && !is_file($root . '/THIRD-PARTY-NOTICES.md'));
 });
 
 echo "\n{$passed} passed; {$failed} failed\n";

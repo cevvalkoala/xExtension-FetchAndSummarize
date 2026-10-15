@@ -3,37 +3,15 @@ declare(strict_types=1);
 
 namespace FetchAndSummarize;
 
-use fivefilters\Readability\Configuration;
-use fivefilters\Readability\Readability;
-
 final class ArticleExtractor {
 	public const MAX_HTML_BYTES = 2_000_000;
 	public const MAX_TEXT_BYTES = 50_000;
 
-	public function extract(string $html, string $url): string {
+	public function extract(string $html): string {
 		if ($html === '' || strlen($html) > self::MAX_HTML_BYTES) {
 			throw new \RuntimeException('The article page is empty or too large.');
 		}
-		$config = new Configuration([
-			'CharThreshold' => 80,
-			'FixRelativeURLs' => false,
-			'OriginalURL' => $url,
-			'DisableJSONLD' => true,
-		]);
-		$parser = new Readability($config);
-		try {
-			$parsed = $parser->parse($html);
-		} catch (\Throwable) {
-			throw new \RuntimeException('No readable article content was found.');
-		}
-		if (!$parsed) {
-			throw new \RuntimeException('No readable article content was found.');
-		}
-		$content = $parser->getContent();
-		if (!is_string($content) || $content === '') {
-			throw new \RuntimeException('No readable article content was found.');
-		}
-		return $this->htmlToText($content);
+		return $this->htmlToText($html);
 	}
 
 	public function extractFeedContent(string $html): string {
@@ -48,7 +26,7 @@ final class ArticleExtractor {
 		$previous = libxml_use_internal_errors(true);
 		try {
 			if (!$document->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
-				throw new \RuntimeException('The article content could not be converted to text.');
+				throw new \RuntimeException('The page content could not be converted to text.');
 			}
 			foreach (['script', 'style', 'noscript', 'template', 'iframe'] as $tag) {
 				$nodes = $document->getElementsByTagName($tag);
@@ -57,18 +35,40 @@ final class ArticleExtractor {
 					$node?->parentNode?->removeChild($node);
 				}
 			}
-			$text = $document->textContent;
+			$text = $this->collectText($document->documentElement);
 		} finally {
 			libxml_clear_errors();
 			libxml_use_internal_errors($previous);
 		}
+
 		$text = preg_replace('/[\p{Z}\s]+/u', ' ', $text) ?? '';
 		$text = trim($text);
 		if ($text === '') {
-			throw new \RuntimeException('The page or feed did not contain extractable article text.');
+			throw new \RuntimeException('The page or feed did not contain extractable text.');
 		}
 		if (strlen($text) > self::MAX_TEXT_BYTES) {
 			$text = self::truncateUtf8($text, self::MAX_TEXT_BYTES);
+		}
+		return $text;
+	}
+
+	private function collectText(\DOMNode $node): string {
+		if ($node instanceof \DOMText) {
+			return $node->nodeValue ?? '';
+		}
+		if (!$node instanceof \DOMElement) {
+			return '';
+		}
+		$tag = strtolower($node->tagName);
+		if ($tag === 'br' || $tag === 'hr') {
+			return "\n";
+		}
+		$text = '';
+		foreach ($node->childNodes as $child) {
+			$text .= $this->collectText($child);
+		}
+		if (in_array($tag, ['address', 'article', 'aside', 'blockquote', 'body', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'td', 'th', 'tr', 'ul'], true)) {
+			return "\n" . $text . "\n";
 		}
 		return $text;
 	}

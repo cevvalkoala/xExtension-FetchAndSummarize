@@ -1,6 +1,6 @@
 # Fetch and Summarize
 
-A per-user FreshRSS extension that fetches each article's original web page, extracts its main text with Readability, and requests an AI summary. If a publisher blocks server-side fetching, the extension can fall back to the text included in the FreshRSS feed entry; this may be only an excerpt. It does not save article HTML, extracted text, or summaries. Summaries are rendered as plain text in the article stream.
+A per-user FreshRSS extension that fetches each article's original web page, extracts its text, and requests an AI summary. If a publisher blocks server-side fetching, the extension can fall back to the text included in the FreshRSS feed entry; this may be only an excerpt. It does not save article HTML, extracted text, or summaries. Summaries are rendered as plain text in the article stream.
 
 ## This extension is built completely via AI.
 I don't know much about FreshRSS extensions and I'm just a novice with PHP. So, I won't claim that I thoroughly understand how it works. But I tested it on my personal single-user FreshRSS setup for weeks without issues.
@@ -12,8 +12,6 @@ I understand most people have reservations about using slopcoded applications. S
 - FreshRSS 1.28.2 or newer.
 - PHP 8.1 or newer with `curl`, `dom`, `xml`, `mbstring`, and `filter` extensions enabled.
 - Outbound HTTPS access to the selected provider. Ollama must be reachable from the FreshRSS server.
-
-The extension bundles Readability 3.3.3 and its runtime dependencies; Composer is not needed on the FreshRSS host.
 
 ## Installation
 Assuming you already have a running FreshRSS instance, installing the extension is just about dropping its folder into FreshRSS's `extensions/` directory and enabling it from the web UI.
@@ -86,4 +84,4 @@ The tests use fake provider transports and fake DNS/HTTP transports. They do not
 
 ## License
 
-This extension is licensed under AGPL-3.0-or-later. See `LICENSE` and `THIRD-PARTY-NOTICES.md` for third-party terms and pinned source versions.
+This extension is licensed under AGPL-3.0-or-later. See `LICENSE` for details.

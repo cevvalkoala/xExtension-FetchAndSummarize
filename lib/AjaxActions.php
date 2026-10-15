@@ -80,7 +80,7 @@ final class AjaxActions {
 			$feedExcerpt = false;
 			try {
 				$page = (new ArticleFetcher())->fetch($entry->link());
-				$text = $extractor->extract($page['html'], $page['url']);
+				$text = $extractor->extract($page['html']);
 			} catch (\RuntimeException $fetchError) {
 				try {
 					$text = $extractor->extractFeedContent((string)$entry->content(false));

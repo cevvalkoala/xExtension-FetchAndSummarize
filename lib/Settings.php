@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace FetchAndSummarize;
 
 final class Settings {
-	public const DEFAULT_PROMPT = 'Fetch the article from the link. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.';
+	public const DEFAULT_PROMPT = 'Fetch the article from the link. Analyze the article page and disregard unrelated things from the source. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.';
 
 	/** @var array<string,string> */
 	public const DEFAULT_URLS = [
