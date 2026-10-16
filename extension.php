@@ -21,6 +21,7 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 	public function jsVars(array $vars): array {
 		$vars['fetch_and_summarize'] = [
 			'url' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'summarize']], 'php'),
+			'cachedUrl' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'cached_summary']], 'php'),
 			'modelsUrl' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'models']], 'php'),
 			'unreadUrl' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'unread_ids']], 'php'),
 			'i18n' => [
@@ -57,7 +58,7 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 			Minz_Error::error(403);
 		}
 		$ajaxAction = Minz_Request::paramString('fas_action', plaintext: true);
-		if (in_array($ajaxAction, ['models', 'summarize', 'unread_ids'], true)) {
+		if (in_array($ajaxAction, ['models', 'summarize', 'unread_ids', 'cached_summary'], true)) {
 			FetchAndSummarize\AjaxActions::dispatch($this, $ajaxAction);
 			return;
 		}

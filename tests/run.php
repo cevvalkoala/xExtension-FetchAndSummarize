@@ -354,6 +354,8 @@ $test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid 
 		'unread-wrong-method' => ['unread-get', 405],
 		'unread-bad-csrf' => ['unread-bad-csrf', 403],
 		'unread-invalid-feed' => ['unread-invalid-feed', 400],
+		'cache-wrong-method' => ['cache-get', 405],
+		'cache-bad-csrf' => ['cache-bad-csrf', 403],
 	];
 	foreach ($cases as $name => [$scenario, $expectedStatus]) {
 		$command = [PHP_BINARY, __DIR__ . '/ajax-case.php', $scenario];
@@ -391,10 +393,44 @@ $test('unread feed lookup returns only DAO-provided entry IDs', static function 
 	$assert(isset($parts[1]) && (int)$parts[1] === 200);
 });
 
+$test('automatic cached-summary lookup never generates on a cache miss', static function () use ($assert): void {
+	$pipes = [];
+	$process = proc_open([PHP_BINARY, __DIR__ . '/ajax-case.php', 'cache-valid'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
+	if (!is_resource($process)) throw new RuntimeException('could not start cached summary lookup case');
+	fclose($pipes[0]);
+	$output = stream_get_contents($pipes[1]);
+	$error = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	$status = proc_close($process);
+	$assert($status === 0, 'cached summary lookup child failed: ' . $error);
+	$parts = explode("\n__HTTP__", $output, 2);
+	$data = json_decode($parts[0] ?? '', true);
+	$assert($data === ['cached' => false]);
+	$assert(isset($parts[1]) && (int)$parts[1] === 200);
+});
+
+$test('automatic cache lookup reports a miss without generating a summary', static function () use ($assert): void {
+	$pipes = [];
+	$process = proc_open([PHP_BINARY, __DIR__ . '/ajax-case.php', 'cache-valid'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
+	if (!is_resource($process)) throw new RuntimeException('could not start automatic cache case');
+	fclose($pipes[0]);
+	$output = stream_get_contents($pipes[1]);
+	$error = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	$status = proc_close($process);
+	$assert($status === 0, 'automatic cache child failed: ' . $error);
+	$parts = explode("\n__HTTP__", $output, 2);
+	$data = json_decode($parts[0] ?? '', true);
+	$assert($data === ['cached' => false]);
+	$assert(isset($parts[1]) && (int)$parts[1] === 200);
+});
+
 $test('metadata and runtime have no parser vendor bundle', static function () use ($assert): void {
 	$root = dirname(__DIR__);
 	$metadata = json_decode((string)file_get_contents($root . '/metadata.json'), true, 512, JSON_THROW_ON_ERROR);
-	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'CC0-1.0');
+	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['version'] === '1.2.0' && $metadata['license'] === 'CC0-1.0');
 	$extension = (string)file_get_contents($root . '/extension.php');
 	$ajax = (string)file_get_contents($root . '/lib/AjaxActions.php');
 	$assert(str_contains($extension, "'c' => 'extension', 'a' => 'configure'"));
@@ -403,6 +439,8 @@ $test('metadata and runtime have no parser vendor bundle', static function () us
 	$assert(str_contains($extension, "'fas_action' => 'summarize'"));
 	$assert(str_contains($extension, "'fas_action' => 'models'"));
 	$assert(str_contains($extension, "'fas_action' => 'unread_ids'"));
+	$assert(str_contains($extension, "'fas_action' => 'cached_summary'"));
+	$assert(str_contains($extension, "'fas_action' => 'cached_summary'"));
 	$assert(str_contains($ajax, "if (\$action === 'models')"));
 	$assert(!is_dir($root . '/vendor') && !is_file($root . '/THIRD-PARTY-NOTICES.md'));
 });

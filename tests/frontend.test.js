@@ -50,6 +50,7 @@ class Element {
 	addEventListener(name, handler) { this.listeners.set(name, handler); }
 
 	closest(selector) {
+		if (selector === '[id^="flux_"]') return this.id.startsWith('flux_') ? this : null;
 		const className = selector.slice(1);
 		return selector.startsWith('.') && this.className.includes(className) ? this : null;
 	}
@@ -80,6 +81,11 @@ class Entry extends Element {
 		this.header = withHeader ? new Element('ul') : null;
 		if (this.header) {
 			this.header.className = 'horizontal-list flux_header';
+			this.websiteItem = new Element('li');
+			this.websiteItem.className = 'item website';
+			this.websiteLink = new Element('a');
+			this.websiteItem.append(this.websiteLink);
+			this.header.append(this.websiteItem);
 			this.append(this.header);
 		}
 		const fluxContent = new Element('div');
@@ -152,7 +158,8 @@ const allElements = () => {
 };
 
 global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
-	url: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=summarize',
+		url: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=summarize',
+		cachedUrl: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=cached_summary',
 i18n: {
 		button: 'F&S', loading: 'Loading...', error: 'Could not summarize.',
 		summaryFeed: 'Summary source: text provided in the feed item.',
@@ -169,17 +176,24 @@ unreadUrl: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=unread_ids
 global.document = {
 	body: { addEventListener: (name, handler) => bodyHandlers.set(name, handler) },
 	addEventListener: (name, handler) => handlers.set(name, handler),
-	querySelectorAll: (selector) => selector === '[id^="flux_"]' ? entries : [],
-	querySelector: (selector) => selector === '#aside_feed li.active[id^="f_"]' ? feedRow : null,
+	querySelectorAll: (selector) => selector === '[id^="flux_"]' ? entries : (selector === '.fetchandsummarize-unread' ? allElements().filter((element) => element.className.includes('fetchandsummarize-unread')) : []),
+	querySelector: (selector) => selector === '#aside_feed li.active[id^="f_"]' ? feedRow : (selector === '#stream.normal > .flux > .flux_header > li.item.website > a' ? entries[0].websiteLink : null),
 	createElement: (tagName) => new Element(tagName),
 	getElementById: (id) => controls.get(id) || allElements().find((element) => element.id === id) || null,
 };
 
 let requests = 0;
 let modelRequests = 0;
+let cacheRequests = 0;
 let completeFirst;
 const summaryCalls = new Map();
 global.fetch = (url, options) => {
+	if (url === './?c=extension&a=configure&e=FetchAndSummarize&fas_action=cached_summary') {
+		cacheRequests++;
+		const body = new URLSearchParams(options.body);
+		assert.equal(body.get('_csrf'), 'csrf-test');
+		return Promise.resolve({ ok: true, json: async () => ({ cached: true, source: 'article', summary: 'Automatically restored summary' }) });
+	}
 	if (url === './?c=extension&a=configure&e=FetchAndSummarize&fas_action=unread_ids') {
 		const body = new URLSearchParams(options.body);
 		assert.equal(body.get('feed_id'), '77');
@@ -253,8 +267,8 @@ async function run() {
 	const button202 = entries[1].querySelector('.fetchandsummarize-button');
 	assert.ok(button101 && button202, 'controls should be inserted into multiple entries');
 	assert.equal(button101.textContent, 'F&S');
-	const unreadButton = feedRow.querySelector('.fetchandsummarize-unread');
-	assert.ok(unreadButton && feedRow.children[1] === unreadButton, 'F&S Unread should sit beside the active feed title');
+	const unreadButton = entries[0].websiteItem.querySelector('.fetchandsummarize-unread');
+	assert.ok(unreadButton && entries[0].websiteItem.children[1] === unreadButton, 'F&S Unread should sit beside the feed name above the article list');
 	assert.equal(unreadButton.textContent, 'F&S Unread');
 	assert.equal(button101.textContent, 'F&S');
 	assert.equal(button101.dataset.entryId, '101');
@@ -293,6 +307,16 @@ async function run() {
 	await click({ target: unreadButton, preventDefault() {} });
 	assert.equal(document.getElementById('fetchandsummarize-unread-status-77').textContent, 'Summarized 2 unread items.');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').textContent, 'Summary source: article fetched from the publisher\'s server.\n\nCached article summary');
+	entries.push(new Entry('flux_505'));
+	bodyHandlers.get('freshrss:load-more')();
+	const beforeCacheLookup = requests;
+	const openArticle = handlers.get('freshrss:openArticle');
+	await openArticle({ target: entries[4] });
+	assert.equal(cacheRequests, 1);
+	assert.equal(requests, beforeCacheLookup, 'opening an article should look up cached summaries without regenerating them');
+	assert.equal(document.getElementById('fetchandsummarize-result-505').textContent, 'Summary source: article fetched from the publisher\'s server.\n\nAutomatically restored summary');
+	await openArticle({ target: entries[4] });
+	assert.equal(cacheRequests, 1, 'cached summary lookup should happen once per opened entry');
 
 	const css = fs.readFileSync(path.join(__dirname, '..', 'static', 'fetchandsummarize.css'), 'utf8');
 	assert.match(css, /@media\s*\(max-width:\s*600px\)/, 'mobile layout rules should be present');

@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 final class FreshRSS_Auth {
 	public static function hasAccess(): bool { return ($GLOBALS['fas_case'] ?? '') !== 'unauthorized'; }
-	public static function isCsrfOk(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['bad-csrf', 'models-bad-csrf', 'unread-bad-csrf'], true); }
+	public static function isCsrfOk(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['bad-csrf', 'models-bad-csrf', 'unread-bad-csrf', 'cache-bad-csrf'], true); }
 }
 final class Minz_Request {
-	public static function isPost(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['get', 'models-get', 'unread-get'], true); }
+	public static function isPost(): bool { return !in_array($GLOBALS['fas_case'] ?? '', ['get', 'models-get', 'unread-get', 'cache-get'], true); }
 	public static function paramString(string $name, bool $plaintext = false): string {
 		if ($name === 'id') return ($GLOBALS['fas_case'] ?? '') === 'invalid-id' ? '1/not-an-id' : '12345678901234567890';
 		if ($name === 'feed_id') return ($GLOBALS['fas_case'] ?? '') === 'unread-invalid-feed' ? 'nope' : '77';
@@ -38,5 +38,5 @@ final class FetchAndSummarizeExtension {
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 $GLOBALS['fas_case'] = $argv[1] ?? '';
 register_shutdown_function(static function (): void { echo "\n__HTTP__" . http_response_code(); });
-$action = str_starts_with($GLOBALS['fas_case'], 'models-') ? 'models' : (str_starts_with($GLOBALS['fas_case'], 'unread-') ? 'unread_ids' : 'summarize');
+$action = str_starts_with($GLOBALS['fas_case'], 'models-') ? 'models' : (str_starts_with($GLOBALS['fas_case'], 'unread-') ? 'unread_ids' : (str_starts_with($GLOBALS['fas_case'], 'cache-') ? 'cached_summary' : 'summarize'));
 FetchAndSummarize\AjaxActions::dispatch(new FetchAndSummarizeExtension(), $action);

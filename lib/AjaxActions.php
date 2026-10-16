@@ -23,6 +23,9 @@ final class AjaxActions {
 		if ($action === 'unread_ids') {
 			self::unreadIds();
 		}
+		if ($action === 'cached_summary') {
+			self::cachedSummary($extension);
+		}
 		self::respond(400, ['error' => 'The requested extension action is invalid.']);
 	}
 
@@ -60,6 +63,31 @@ final class AjaxActions {
 		} catch (\Throwable $e) {
 			\Minz_Log::warning('FetchAndSummarize unread feed lookup failed (' . get_class($e) . ').');
 			self::respond(500, ['error' => 'Unread entries for this feed could not be loaded.']);
+		}
+	}
+
+	private static function cachedSummary(\FetchAndSummarizeExtension $extension): never {
+		$id = \Minz_Request::paramString('id', plaintext: true);
+		if (!EntryId::isValid($id)) {
+			self::respond(400, ['error' => 'The article identifier is invalid.']);
+		}
+		$entry = \FreshRSS_Factory::createEntryDao()->searchById($id);
+		if ($entry === null || trim($entry->link()) === '') {
+			self::respond(200, ['cached' => false]);
+		}
+		try {
+			$provider = $extension->getSetting('provider', 'openai');
+			$settings = Settings::validate(
+				$provider,
+				$extension->getSetting('model'),
+				$extension->getSetting('api_url', Settings::DEFAULT_URLS[$provider] ?? ''),
+				$extension->getSetting('prompt')
+			);
+			$cached = $extension->getCachedSummary($id, $entry->link(), (string)$entry->content(false), $settings);
+			self::respond(200, $cached === null ? ['cached' => false] : $cached + ['cached' => true]);
+		} catch (\Throwable $e) {
+			\Minz_Log::warning('FetchAndSummarize automatic cache lookup failed (' . get_class($e) . ').');
+			self::respond(200, ['cached' => false]);
 		}
 	}
 

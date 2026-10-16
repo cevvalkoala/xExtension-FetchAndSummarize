@@ -4,6 +4,8 @@
 	const active = new Set();
 	const activeFeedJobs = new Set();
 	const batchSummaries = new Map();
+	const cacheLookupsPending = new Set();
+	const cacheLookupsDone = new Set();
 	const MAX_BATCH_CACHE_ENTRIES = 300;
 	const MAX_BATCH_CACHE_BYTES = 3_000_000;
 	const config = () => window.context?.extensions?.fetch_and_summarize;
@@ -57,10 +59,11 @@
 
 	function addUnreadButton(settings) {
 		const feed = document.querySelector('#aside_feed li.active[id^="f_"]');
-		if (!feed || feed.querySelector('.fetchandsummarize-unread')) return;
-		const title = feed.querySelector('a.item-title');
-		if (!title || !feed.id.startsWith('f_')) return;
+		if (!feed || !feed.id.startsWith('f_')) return;
 		const feedId = feed.id.slice(2);
+		if (Array.from(document.querySelectorAll('.fetchandsummarize-unread')).some((button) => button.dataset.feedId === feedId)) return;
+		const title = document.querySelector('#stream.normal > .flux > .flux_header > li.item.website > a') || feed.querySelector('a.item-title');
+		if (!title) return;
 		const button = document.createElement('button');
 		button.className = 'btn fetchandsummarize-unread';
 		button.type = 'button';
@@ -122,6 +125,25 @@
 		});
 		addUnreadButton(settings);
 	}
+
+	document.addEventListener('freshrss:openArticle', async (event) => {
+		const entry = event.target.closest('[id^="flux_"]');
+		if (!entry) return;
+		const id = entry.id.slice(5);
+		if (cacheLookupsDone.has(id) || cacheLookupsPending.has(id)) return;
+		const settings = config();
+		if (!settings?.cachedUrl) return;
+		cacheLookupsPending.add(id);
+		try {
+			const data = await postJson(settings.cachedUrl, { id, _csrf: window.context.csrf }, settings.i18n.error);
+			cacheLookupsDone.add(id);
+			if (data.cached === true && typeof data.summary === 'string') showSummary(id, data, settings);
+		} catch {
+			// Cache lookup is opportunistic; article opening should not show a failure for a cache miss or stale session.
+		} finally {
+			cacheLookupsPending.delete(id);
+		}
+	});
 
 	document.addEventListener('click', async (event) => {
 		const unreadButton = event.target.closest('.fetchandsummarize-unread');
