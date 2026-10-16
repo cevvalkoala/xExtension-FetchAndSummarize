@@ -64,6 +64,10 @@ class Element {
 	}
 
 	querySelector(selector) {
+		if (selector === ':scope > .transition' || selector === ':scope > .flux') {
+			const className = selector.endsWith('.transition') ? 'transition' : 'flux';
+			return this.children.find((child) => child.className.split(/\s+/).includes(className)) || null;
+		}
 		if (selector === 'ul.flux_header, .flux_header') return this.header || null;
 		if (selector === '.flux_content .content > .text') return this.articleText || null;
 		if (selector === '.flux_content .content') return this.contentArea || null;
@@ -113,6 +117,9 @@ const entries = [new Entry('flux_101'), new Entry('flux_202', false)];
 const stream = new Element('div');
 stream.id = 'stream';
 stream.className = 'normal';
+const firstDateSeparator = new Element('div');
+firstDateSeparator.className = 'transition';
+stream.append(firstDateSeparator);
 entries.forEach((entry) => stream.append(entry));
 const handlers = new Map();
 const bodyHandlers = new Map();
@@ -283,6 +290,7 @@ async function run() {
 	const feedToolbar = stream.children[0];
 	const unreadButton = feedToolbar.querySelector('.fetchandsummarize-unread');
 	assert.ok(feedToolbar.className.includes('fetchandsummarize-feed-toolbar'), 'the unread action should be clearly placed above the article list');
+	assert.equal(stream.children[1], firstDateSeparator, 'the toolbar should precede the first date line');
 	assert.ok(unreadButton && feedToolbar.children[1] === unreadButton);
 	assert.equal(unreadButton.textContent, 'F&S Unread');
 	assert.equal(button101.textContent, 'F&S');

@@ -92,8 +92,10 @@
 		status.setAttribute('aria-live', 'polite');
 		button.setAttribute('aria-describedby', status.id);
 		toolbar.append(description, button, status);
-		const firstEntry = stream.querySelector('.flux');
-		if (firstEntry) stream.insertBefore(toolbar, firstEntry);
+		const firstDateSeparator = stream.querySelector(':scope > .transition');
+		const firstEntry = stream.querySelector(':scope > .flux') || stream.querySelector('.flux');
+		const insertionPoint = firstDateSeparator || firstEntry;
+		if (insertionPoint) stream.insertBefore(toolbar, insertionPoint);
 		else stream.prepend(toolbar);
 	}
 
