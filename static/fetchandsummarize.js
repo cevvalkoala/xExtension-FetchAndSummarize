@@ -57,26 +57,44 @@
 		return data;
 	}
 
+	function currentFeedId() {
+		const get = new URLSearchParams(window.location?.search || '').get('get') || '';
+		if (/^f_\d{1,20}$/.test(get)) return get.slice(2);
+		const pathMatch = (window.location?.pathname || '').match(/(?:^|\/)f_(\d{1,20})(?:\/|$)/);
+		if (pathMatch) return pathMatch[1];
+		const selected = document.querySelector('#aside_feed li.active[id^="f_"]');
+		return selected?.id.startsWith('f_') ? selected.id.slice(2) : '';
+	}
+
 	function addUnreadButton(settings) {
-		const feed = document.querySelector('#aside_feed li.active[id^="f_"]');
-		if (!feed || !feed.id.startsWith('f_')) return;
-		const feedId = feed.id.slice(2);
-		if (Array.from(document.querySelectorAll('.fetchandsummarize-unread')).some((button) => button.dataset.feedId === feedId)) return;
-		const title = document.querySelector('#stream.normal > .flux > .flux_header > li.item.website > a') || feed.querySelector('a.item-title');
-		if (!title) return;
+		const stream = document.querySelector('#stream.normal');
+		const feedId = currentFeedId();
+		if (!stream || feedId === '') return;
+		const oldToolbar = stream.querySelector('.fetchandsummarize-feed-toolbar');
+		if (oldToolbar?.dataset.feedId === feedId) return;
+		oldToolbar?.remove();
+
+		const toolbar = document.createElement('div');
+		toolbar.className = 'fetchandsummarize-feed-toolbar';
+		toolbar.dataset.feedId = feedId;
+		const description = document.createElement('span');
+		description.className = 'fetchandsummarize-feed-label';
+		description.textContent = settings.i18n.unreadDescription;
 		const button = document.createElement('button');
 		button.className = 'btn fetchandsummarize-unread';
 		button.type = 'button';
 		button.dataset.feedId = feedId;
 		button.textContent = settings.i18n.unreadButton;
-		button.setAttribute('aria-describedby', `fetchandsummarize-unread-status-${feedId}`);
 		const status = document.createElement('span');
 		status.className = 'fetchandsummarize-unread-status';
 		status.id = `fetchandsummarize-unread-status-${feedId}`;
 		status.setAttribute('role', 'status');
 		status.setAttribute('aria-live', 'polite');
-		title.after(button);
-		button.after(status);
+		button.setAttribute('aria-describedby', status.id);
+		toolbar.append(description, button, status);
+		const firstEntry = stream.querySelector('.flux');
+		if (firstEntry) stream.insertBefore(toolbar, firstEntry);
+		else stream.prepend(toolbar);
 	}
 
 	function addButtons() {

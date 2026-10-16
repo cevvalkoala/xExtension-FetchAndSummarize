@@ -36,6 +36,7 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 				'noModels' => _t('ext.fetch_and_summarize.configure.no_models'),
 				'modelsError' => _t('ext.fetch_and_summarize.configure.models_error'),
 				'unreadButton' => _t('ext.fetch_and_summarize.unread.button'),
+				'unreadDescription' => _t('ext.fetch_and_summarize.unread.description'),
 				'unreadProgress' => _t('ext.fetch_and_summarize.unread.progress'),
 				'unreadComplete' => _t('ext.fetch_and_summarize.unread.complete'),
 				'unreadPartial' => _t('ext.fetch_and_summarize.unread.partial'),

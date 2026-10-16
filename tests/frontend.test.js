@@ -21,9 +21,17 @@ class Element {
 		this.textContent = '';
 	}
 
-	append(child) {
-		child.parentElement = this;
-		this.children.push(child);
+	append(...children) {
+		children.forEach((child) => {
+			child.parentElement = this;
+			this.children.push(child);
+		});
+	}
+
+	remove() {
+		if (!this.parentElement) return;
+		this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+		this.parentElement = null;
 	}
 
 	insertBefore(child, reference) {
@@ -78,6 +86,7 @@ class Entry extends Element {
 	constructor(id, withHeader = true) {
 		super('article');
 		this.id = id;
+		this.className = 'flux';
 		this.header = withHeader ? new Element('ul') : null;
 		if (this.header) {
 			this.header.className = 'horizontal-list flux_header';
@@ -101,6 +110,10 @@ class Entry extends Element {
 }
 
 const entries = [new Entry('flux_101'), new Entry('flux_202', false)];
+const stream = new Element('div');
+stream.id = 'stream';
+stream.className = 'normal';
+entries.forEach((entry) => stream.append(entry));
 const handlers = new Map();
 const bodyHandlers = new Map();
 const options = [
@@ -152,12 +165,12 @@ const controls = new Map([
 const allElements = () => {
 	const result = [];
 	const visit = (element) => { result.push(element); element.children.forEach(visit); };
-	entries.forEach(visit);
+	visit(stream);
 	visit(feedRow);
 	return result;
 };
 
-global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
+global.window = { location: { search: '?c=index&a=normal&get=f_77', pathname: '/i/' }, context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
 		url: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=summarize',
 		cachedUrl: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=cached_summary',
 i18n: {
@@ -166,7 +179,7 @@ i18n: {
 		summaryArticle: 'Summary source: article fetched from the publisher\'s server.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
 		noModels: 'No models.', modelsError: 'Model list error.',
-		unreadButton: 'F&S Unread', unreadProgress: 'Summarizing unread item {current} of {total}...',
+		unreadButton: 'F&S Unread', unreadDescription: 'Summarize every unread article in this feed:', unreadProgress: 'Summarizing unread item {current} of {total}...',
 		unreadComplete: 'Summarized {count} unread items.', unreadPartial: 'Summarized {count} of {total}; {failed} failed.',
 		unreadEmpty: 'No unread items.', unreadError: 'Could not load unread items.',
 	},
@@ -177,7 +190,7 @@ global.document = {
 	body: { addEventListener: (name, handler) => bodyHandlers.set(name, handler) },
 	addEventListener: (name, handler) => handlers.set(name, handler),
 	querySelectorAll: (selector) => selector === '[id^="flux_"]' ? entries : (selector === '.fetchandsummarize-unread' ? allElements().filter((element) => element.className.includes('fetchandsummarize-unread')) : []),
-	querySelector: (selector) => selector === '#aside_feed li.active[id^="f_"]' ? feedRow : (selector === '#stream.normal > .flux > .flux_header > li.item.website > a' ? entries[0].websiteLink : null),
+	querySelector: (selector) => selector === '#aside_feed li.active[id^="f_"]' ? feedRow : (selector === '#stream.normal' ? stream : null),
 	createElement: (tagName) => new Element(tagName),
 	getElementById: (id) => controls.get(id) || allElements().find((element) => element.id === id) || null,
 };
@@ -267,8 +280,10 @@ async function run() {
 	const button202 = entries[1].querySelector('.fetchandsummarize-button');
 	assert.ok(button101 && button202, 'controls should be inserted into multiple entries');
 	assert.equal(button101.textContent, 'F&S');
-	const unreadButton = entries[0].websiteItem.querySelector('.fetchandsummarize-unread');
-	assert.ok(unreadButton && entries[0].websiteItem.children[1] === unreadButton, 'F&S Unread should sit beside the feed name above the article list');
+	const feedToolbar = stream.children[0];
+	const unreadButton = feedToolbar.querySelector('.fetchandsummarize-unread');
+	assert.ok(feedToolbar.className.includes('fetchandsummarize-feed-toolbar'), 'the unread action should be clearly placed above the article list');
+	assert.ok(unreadButton && feedToolbar.children[1] === unreadButton);
 	assert.equal(unreadButton.textContent, 'F&S Unread');
 	assert.equal(button101.textContent, 'F&S');
 	assert.equal(button101.dataset.entryId, '101');
@@ -296,11 +311,13 @@ async function run() {
 	assert.equal(error.textContent, 'The article target was rejected.');
 
 	entries.push(new Entry('flux_303'));
+	stream.append(entries[2]);
 	bodyHandlers.get('freshrss:load-more')();
 	assert.ok(entries[2].querySelector('.fetchandsummarize-button'), 'load-more entries should receive a control');
 	await click({ target: entries[2].querySelector('.fetchandsummarize-button'), preventDefault() {} });
 	assert.match(document.getElementById('fetchandsummarize-result-303').textContent, /non-JSON response \(HTTP 404\)/);
 	entries.push(new Entry('flux_404'));
+	stream.append(entries[3]);
 	bodyHandlers.get('freshrss:load-more')();
 	await click({ target: entries[3].querySelector('.fetchandsummarize-button'), preventDefault() {} });
 	assert.equal(document.getElementById('fetchandsummarize-result-404').textContent, 'Summary source: text provided in the feed item.\n\nRSS excerpt summary');
@@ -308,6 +325,7 @@ async function run() {
 	assert.equal(document.getElementById('fetchandsummarize-unread-status-77').textContent, 'Summarized 2 unread items.');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').textContent, 'Summary source: article fetched from the publisher\'s server.\n\nCached article summary');
 	entries.push(new Entry('flux_505'));
+	stream.append(entries[4]);
 	bodyHandlers.get('freshrss:load-more')();
 	const beforeCacheLookup = requests;
 	const openArticle = handlers.get('freshrss:openArticle');

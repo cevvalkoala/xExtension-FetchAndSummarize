@@ -10,6 +10,7 @@ return [
 		'summary_source_article' => 'Summary source: article fetched from the publisher\'s server.',
 		'unread' => [
 			'button' => 'F&S Unread',
+			'description' => 'Summarize every unread article in this feed:',
 			'progress' => 'Summarizing unread item {current} of {total}...',
 			'complete' => 'Summarized {count} unread items.',
 			'partial' => 'Summarized {count} of {total} unread items; {failed} failed.',
