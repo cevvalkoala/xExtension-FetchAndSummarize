@@ -145,7 +145,7 @@ const allElements = () => {
 global.window = { context: { csrf: 'csrf-test', extensions: { fetch_and_summarize: {
 	url: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=summarize',
 i18n: {
-		button: 'Fetch & Summarize', loading: 'Loading...', error: 'Could not summarize.',
+		button: 'F&S', loading: 'Loading...', error: 'Could not summarize.',
 		summaryFeed: 'Summary source: text provided in the feed item.',
 		summaryArticle: 'Summary source: article fetched from the publisher\'s server.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
@@ -228,6 +228,8 @@ async function run() {
 	const button101 = entries[0].querySelector('.fetchandsummarize-button');
 	const button202 = entries[1].querySelector('.fetchandsummarize-button');
 	assert.ok(button101 && button202, 'controls should be inserted into multiple entries');
+	assert.equal(button101.textContent, 'F&S');
+	assert.equal(button101.textContent, 'F&S');
 	assert.equal(button101.dataset.entryId, '101');
 	assert.ok(entries[1].children[0].className.includes('fetchandsummarize-toolbar'), 'entries without a standard header need a fallback toolbar');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').attributes.role, 'status');

@@ -353,7 +353,7 @@ $test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid 
 $test('metadata and runtime have no parser vendor bundle', static function () use ($assert): void {
 	$root = dirname(__DIR__);
 	$metadata = json_decode((string)file_get_contents($root . '/metadata.json'), true, 512, JSON_THROW_ON_ERROR);
-	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'AGPL-3.0-or-later');
+	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['license'] === 'CC0-1.0');
 	$extension = (string)file_get_contents($root . '/extension.php');
 	$ajax = (string)file_get_contents($root . '/lib/AjaxActions.php');
 	$assert(str_contains($extension, "'c' => 'extension', 'a' => 'configure'"));

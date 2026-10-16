@@ -35,7 +35,7 @@ sudo chown -R www-data:www-data xExtension-FetchAndSummarize
 3. Click on the gears icon next to the extension's name, to open its configuration page.
 4. Select a provider, set the API URL, enter the API key if required.
 5. Click **Load models**. The models provided by your provider (or Ollama setup) will be listed in the box. Choose the one you like. Click **Save**.
-6. Open the normal article stream and use **Fetch & Summarize** on an article.
+6. Open the normal article stream and use **F&S** on an article.
 
 The server action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. It does not accept a URL from the browser.
 
@@ -84,4 +84,4 @@ The tests use fake provider transports and fake DNS/HTTP transports. They do not
 
 ## License
 
-This extension is licensed under AGPL-3.0-or-later. See `LICENSE` for details.
+This extension is dedicated to the public domain under CC0 1.0 Universal. See `LICENSE` for the full legal code.

@@ -3,7 +3,7 @@
 	"author": "FetchAndSummarize contributors",
 	"description": "Fetch article text and create an inline AI summary",
 	"version": "1.0.0",
-	"license": "AGPL-3.0-or-later",
+	"license": "CC0-1.0",
 	"entrypoint": "FetchAndSummarize",
 	"type": "user"
 }

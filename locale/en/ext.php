@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 return [
 	'fetch_and_summarize' => [
-		'button' => 'Fetch & Summarize',
+		'button' => 'F&S',
 		'loading' => 'Fetching article and creating summary...',
 		'error' => 'The summary could not be created. Check the extension settings and try again.',
 		'summary_source_feed' => 'Summary source: text provided in the feed item.',
