@@ -17,6 +17,19 @@
 	align-items: center;
 }
 
+.fetchandsummarize-unread {
+	margin-inline-start: 0.35rem;
+	white-space: nowrap;
+}
+
+.fetchandsummarize-unread-status {
+	display: block;
+	max-width: 22rem;
+	font-size: 0.85em;
+	white-space: normal;
+	word-break: break-word;
+}
+
 .fetchandsummarize-result {
 	clear: both;
 	box-sizing: border-box;

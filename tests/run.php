@@ -217,6 +217,27 @@ $test('FreshRSS configuration is saved atomically and keeps provider keys scoped
 	}
 });
 
+$test('summaries are cached per entry and invalidated when source or settings change', static function () use ($assert): void {
+	$pipes = [];
+	$process = proc_open([PHP_BINARY, __DIR__ . '/cache-case.php'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
+	if (!is_resource($process)) throw new RuntimeException('could not start summary cache case');
+	fclose($pipes[0]);
+	$output = stream_get_contents($pipes[1]);
+	$error = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	$status = proc_close($process);
+	$assert($status === 0, 'summary cache child failed: ' . $error);
+	$data = json_decode($output, true);
+	$assert(is_array($data) && $data['initialMiss'] === null && $data['configMiss'] === null && $data['sourceMiss'] === null);
+	$assert($data['hit'] === ['summary' => 'cached result', 'source' => 'article']);
+	$assert($data['feedHit'] === ['summary' => 'feed result', 'source' => 'feed']);
+	$assert(count($data['files']) === 1);
+	$assert($data['cacheEntryCount'] <= 300 && $data['cacheBytes'] <= 3_000_000);
+	$assert($data['countCappedEntryCount'] === 300);
+	$assert(!str_contains(json_encode($data['files'], JSON_THROW_ON_ERROR), 'must-not-be-cached'));
+});
+
 $test('settings reject invalid providers, models, and API URL schemes', static function () use ($throws): void {
 	$throws(static fn () => Settings::validate('unknown', 'model', 'https://api.example', ''), InvalidArgumentException::class);
 	$throws(static fn () => Settings::validate('openai', 'bad model', 'https://api.openai.com/v1', ''), InvalidArgumentException::class);
@@ -330,6 +351,9 @@ $test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid 
 		'model-wrong-method' => ['models-get', 405],
 		'model-bad-csrf' => ['models-bad-csrf', 403],
 		'model-missing-key' => ['models-no-key', 400],
+		'unread-wrong-method' => ['unread-get', 405],
+		'unread-bad-csrf' => ['unread-bad-csrf', 403],
+		'unread-invalid-feed' => ['unread-invalid-feed', 400],
 	];
 	foreach ($cases as $name => [$scenario, $expectedStatus]) {
 		$command = [PHP_BINARY, __DIR__ . '/ajax-case.php', $scenario];
@@ -350,6 +374,23 @@ $test('core extension AJAX actions reject missing auth, CSRF, POST, and invalid 
 	}
 });
 
+$test('unread feed lookup returns only DAO-provided entry IDs', static function () use ($assert): void {
+	$pipes = [];
+	$process = proc_open([PHP_BINARY, __DIR__ . '/ajax-case.php', 'unread-valid'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
+	if (!is_resource($process)) throw new RuntimeException('could not start unread feed case');
+	fclose($pipes[0]);
+	$output = stream_get_contents($pipes[1]);
+	$error = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	$status = proc_close($process);
+	$assert($status === 0, 'unread feed child failed: ' . $error);
+	$parts = explode("\n__HTTP__", $output, 2);
+	$data = json_decode($parts[0] ?? '', true);
+	$assert(is_array($data) && $data['ids'] === ['987', '654']);
+	$assert(isset($parts[1]) && (int)$parts[1] === 200);
+});
+
 $test('metadata and runtime have no parser vendor bundle', static function () use ($assert): void {
 	$root = dirname(__DIR__);
 	$metadata = json_decode((string)file_get_contents($root . '/metadata.json'), true, 512, JSON_THROW_ON_ERROR);
@@ -361,6 +402,7 @@ $test('metadata and runtime have no parser vendor bundle', static function () us
 	$assert(str_contains($extension, 'AjaxActions::dispatch($this, $ajaxAction)'));
 	$assert(str_contains($extension, "'fas_action' => 'summarize'"));
 	$assert(str_contains($extension, "'fas_action' => 'models'"));
+	$assert(str_contains($extension, "'fas_action' => 'unread_ids'"));
 	$assert(str_contains($ajax, "if (\$action === 'models')"));
 	$assert(!is_dir($root . '/vendor') && !is_file($root . '/THIRD-PARTY-NOTICES.md'));
 });

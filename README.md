@@ -1,6 +1,6 @@
 # Fetch and Summarize
 
-A per-user FreshRSS extension that fetches each article's original web page, extracts its text, and requests an AI summary. If a publisher blocks server-side fetching, the extension can fall back to the text included in the FreshRSS feed entry; this may be only an excerpt. It does not save article HTML, extracted text, or summaries. Summaries are rendered as plain text in the article stream.
+A per-user FreshRSS extension that fetches each article's original web page, extracts its text, and requests an AI summary. If a publisher blocks server-side fetching, the extension can fall back to the text included in the FreshRSS feed entry; this may be only an excerpt. It does not save article HTML or extracted text. Summaries are cached per user and rendered as plain text in the article stream.
 
 ## This extension is built completely via AI.
 I don't know much about FreshRSS extensions and I'm just a novice with PHP. So, I won't claim that I thoroughly understand how it works. But I tested it on my personal single-user FreshRSS setup for weeks without issues.
@@ -36,8 +36,9 @@ sudo chown -R www-data:www-data xExtension-FetchAndSummarize
 4. Select a provider, set the API URL, enter the API key if required.
 5. Click **Load models**. The models provided by your provider (or Ollama setup) will be listed in the box. Choose the one you like. Click **Save**.
 6. Open the normal article stream and use **F&S** on an article.
+7. Use **F&S Unread** beside the selected feed name to summarize all unread entries in that feed. The batch processes every unread item; it does not stop at the cache limit.
 
-The server action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. It does not accept a URL from the browser.
+The summary action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. The **F&S Unread** action accepts a feed ID and queries unread entry IDs from that same user's store. Neither action accepts article URLs from the browser.
 
 ## Provider settings
 
@@ -57,7 +58,7 @@ When FreshRSS runs in a container, `127.0.0.1` addresses that container, not the
 
 ## Configuration and privacy
 
-Provider, model, API URL, prompt, and key are stored in the current user's FreshRSS configuration. The key field is always blank after saving; leaving it blank preserves the saved key only while the provider and API URL remain unchanged. Changing provider or URL clears the old key to prevent forwarding it to another endpoint. **Clear the saved API key** removes it explicitly. FreshRSS user configuration is server-side, so protect the data directory with host filesystem permissions and include it in appropriately protected backups. Use HTTPS for FreshRSS and handle backup files as secrets.
+Provider, model, API URL, prompt, and key are stored in the current user's FreshRSS configuration. The key field is always blank after saving; leaving it blank preserves the saved key only while the provider and API URL remain unchanged. Changing provider or URL clears the old key to prevent forwarding it to another endpoint. **Clear the saved API key** removes it explicitly. The per-user summary cache contains entry IDs, summaries, source labels, and non-reversible signatures; it does not contain API keys or article text. The cache is capped at 300 entries and 3 MB, evicting the oldest summaries when new entries exceed either limit. If an unread-feed batch contains more summaries than the cache can hold, the oldest results are evicted as the batch continues; requesting an evicted result later may generate it again. Protect the data directory and backups with host filesystem permissions. Use HTTPS for FreshRSS and handle backups as sensitive data.
 
 With hosted providers, extracted article text and the custom prompt are sent to that third party. Ollama can keep model processing on your own server, subject to its network configuration. Review each provider's privacy terms before use.
 
@@ -65,7 +66,7 @@ Article fetching is restricted to HTTP(S) public-routable destinations. Every re
 
 Custom provider URLs, especially Ollama URLs, are server-side network destinations. Only trusted FreshRSS users should be permitted to configure them. On multi-user installations, restrict who can enable/configure this extension and apply outbound firewall controls; per-user settings alone do not make custom endpoints safe for untrusted users.
 
-Fetched pages, feed excerpts, and model responses are treated as untrusted data. Article or feed text is sent as plain text with an explicit untrusted-data instruction; feed-provided text is identified to the model as potentially incomplete. Model output is inserted with text-only DOM APIs. Content is not persisted by the extension. JavaScript-rendered, paywalled, anti-bot-protected, or otherwise inaccessible pages may only provide the shorter text available in the feed, or may not yield usable text at all.
+Fetched pages, feed excerpts, and model responses are treated as untrusted data. Article or feed text is sent as plain text with an explicit untrusted-data instruction; feed-provided text is identified to the model as potentially incomplete. Model output is inserted with text-only DOM APIs. Article HTML and extracted article/feed text are not persisted. JavaScript-rendered, paywalled, anti-bot-protected, or otherwise inaccessible pages may only provide the shorter text available in the feed, or may not yield usable text at all.
 
 ## Timeouts and limits
 

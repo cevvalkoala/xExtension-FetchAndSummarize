@@ -4,6 +4,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/bootstrap.php';
 
 final class FetchAndSummarizeExtension extends Minz_Extension {
+	private const SUMMARY_CACHE_FILE = 'summaries.json';
+	private const SUMMARY_CACHE_MAX_ENTRIES = 300;
+	private const SUMMARY_CACHE_MAX_BYTES = 3_000_000;
+
 	public function init(): void {
 		parent::init();
 		$this->registerTranslates();
@@ -18,6 +22,7 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 		$vars['fetch_and_summarize'] = [
 			'url' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'summarize']], 'php'),
 			'modelsUrl' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'models']], 'php'),
+			'unreadUrl' => Minz_Url::display(['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName(), 'fas_action' => 'unread_ids']], 'php'),
 			'i18n' => [
 				'button' => _t('ext.fetch_and_summarize.button'),
 				'loading' => _t('ext.fetch_and_summarize.loading'),
@@ -29,6 +34,12 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 				'modelsLoaded' => _t('ext.fetch_and_summarize.configure.models_loaded'),
 				'noModels' => _t('ext.fetch_and_summarize.configure.no_models'),
 				'modelsError' => _t('ext.fetch_and_summarize.configure.models_error'),
+				'unreadButton' => _t('ext.fetch_and_summarize.unread.button'),
+				'unreadProgress' => _t('ext.fetch_and_summarize.unread.progress'),
+				'unreadComplete' => _t('ext.fetch_and_summarize.unread.complete'),
+				'unreadPartial' => _t('ext.fetch_and_summarize.unread.partial'),
+				'unreadEmpty' => _t('ext.fetch_and_summarize.unread.empty'),
+				'unreadError' => _t('ext.fetch_and_summarize.unread.error'),
 			],
 		];
 		return $vars;
@@ -46,7 +57,7 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 			Minz_Error::error(403);
 		}
 		$ajaxAction = Minz_Request::paramString('fas_action', plaintext: true);
-		if (in_array($ajaxAction, ['models', 'summarize'], true)) {
+		if (in_array($ajaxAction, ['models', 'summarize', 'unread_ids'], true)) {
 			FetchAndSummarize\AjaxActions::dispatch($this, $ajaxAction);
 			return;
 		}
@@ -93,5 +104,80 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 		$configuration = $extensions[$this->getName()] ?? [];
 		$value = is_array($configuration) ? ($configuration[$key] ?? null) : null;
 		return is_string($value) ? $value : $default;
+	}
+
+	/** @param array{provider:string,model:string,api_url:string,prompt:string} $settings @return array{summary:string,source:string}|null */
+	public function getCachedSummary(string $entryId, string $link, string $feedContent, array $settings): ?array {
+		if (!FetchAndSummarize\EntryId::isValid($entryId)) {
+			return null;
+		}
+		$signature = self::summaryCacheSignature($link, $feedContent, $settings);
+		foreach ($this->readSummaryCache() as $cache) {
+			if ($cache['id'] === $entryId && $cache['signature'] === $signature) {
+				return ['summary' => $cache['summary'], 'source' => $cache['source']];
+			}
+		}
+		return null;
+	}
+
+	/** @param array{provider:string,model:string,api_url:string,prompt:string} $settings */
+	public function cacheSummary(string $entryId, string $link, string $feedContent, array $settings, string $summary, string $source): void {
+		if (!FetchAndSummarize\EntryId::isValid($entryId) || $summary === '' || strlen($summary) > FetchAndSummarize\ProviderClient::MAX_SUMMARY_BYTES || !in_array($source, ['article', 'feed'], true)) {
+			return;
+		}
+		$entries = array_values(array_filter($this->readSummaryCache(), static fn (array $item): bool => $item['id'] !== $entryId));
+		$entries[] = [
+			'id' => $entryId,
+			'signature' => self::summaryCacheSignature($link, $feedContent, $settings),
+			'summary' => $summary,
+			'source' => $source,
+		];
+		$encoded = self::encodeSummaryCache($entries);
+		while ($entries !== [] && (count($entries) > self::SUMMARY_CACHE_MAX_ENTRIES || strlen($encoded) > self::SUMMARY_CACHE_MAX_BYTES)) {
+			array_shift($entries);
+			$encoded = self::encodeSummaryCache($entries);
+		}
+		if (strlen($encoded) <= self::SUMMARY_CACHE_MAX_BYTES) {
+			$this->saveFile(self::SUMMARY_CACHE_FILE, $encoded);
+		}
+	}
+
+	/** @return list<array{id:string,signature:string,summary:string,source:string}> */
+	private function readSummaryCache(): array {
+		$stored = $this->getFile(self::SUMMARY_CACHE_FILE);
+		if (!is_string($stored) || strlen($stored) > self::SUMMARY_CACHE_MAX_BYTES) {
+			return [];
+		}
+		$decoded = json_decode($stored, true);
+		$entries = is_array($decoded) ? ($decoded['entries'] ?? null) : null;
+		if (!is_array($entries)) {
+			return [];
+		}
+		$valid = [];
+		foreach ($entries as $entry) {
+			if (!is_array($entry) || !is_string($entry['id'] ?? null) || !FetchAndSummarize\EntryId::isValid($entry['id']) || !is_string($entry['signature'] ?? null) || !is_string($entry['summary'] ?? null) || strlen($entry['summary']) > FetchAndSummarize\ProviderClient::MAX_SUMMARY_BYTES || !in_array($entry['source'] ?? null, ['article', 'feed'], true)) {
+				continue;
+			}
+			$valid[] = ['id' => $entry['id'], 'signature' => $entry['signature'], 'summary' => $entry['summary'], 'source' => $entry['source']];
+		}
+		return $valid;
+	}
+
+	/** @param list<array{id:string,signature:string,summary:string,source:string}> $entries */
+	private static function encodeSummaryCache(array $entries): string {
+		return json_encode(['entries' => $entries], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
+	}
+
+
+	/** @param array{provider:string,model:string,api_url:string,prompt:string} $settings */
+	private static function summaryCacheSignature(string $link, string $feedContent, array $settings): string {
+		return hash('sha256', serialize([
+			$link,
+			hash('sha256', $feedContent),
+			$settings['provider'],
+			$settings['model'],
+			$settings['api_url'],
+			FetchAndSummarize\Settings::prompt($settings['prompt']),
+		]));
 	}
 }

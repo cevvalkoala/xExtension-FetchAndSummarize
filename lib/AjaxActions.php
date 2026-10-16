@@ -20,7 +20,47 @@ final class AjaxActions {
 		if ($action === 'summarize') {
 			self::summarize($extension);
 		}
+		if ($action === 'unread_ids') {
+			self::unreadIds();
+		}
 		self::respond(400, ['error' => 'The requested extension action is invalid.']);
+	}
+
+	private static function unreadIds(): never {
+		$feedId = filter_var(
+			\Minz_Request::paramString('feed_id', plaintext: true),
+			FILTER_VALIDATE_INT,
+			['options' => ['min_range' => 1]]
+		);
+		if ($feedId === false) {
+			self::respond(400, ['error' => 'The feed identifier is invalid.']);
+		}
+
+		try {
+			$dao = \FreshRSS_Factory::createEntryDao();
+			$ids = [];
+			$offset = 0;
+			do {
+				$page = $dao->listIdsWhere('f', $feedId, \FreshRSS_Entry::STATE_NOT_READ, null, '0', '0', 'ASC', '0', [], 1000, $offset);
+				if ($page === null) {
+					break;
+				}
+				if (!is_array($page)) {
+					self::respond(500, ['error' => 'Unread entries for this feed could not be loaded.']);
+				}
+				foreach ($page as $id) {
+					$id = (string)$id;
+					if (EntryId::isValid($id)) {
+						$ids[] = $id;
+					}
+				}
+				$offset += count($page);
+			} while (count($page) === 1000);
+			self::respond(200, ['ids' => $ids]);
+		} catch (\Throwable $e) {
+			\Minz_Log::warning('FetchAndSummarize unread feed lookup failed (' . get_class($e) . ').');
+			self::respond(500, ['error' => 'Unread entries for this feed could not be loaded.']);
+		}
 	}
 
 	private static function models(\FetchAndSummarizeExtension $extension): never {
@@ -72,6 +112,16 @@ final class AjaxActions {
 				$extension->getSetting('api_url', Settings::DEFAULT_URLS[$provider] ?? ''),
 				$extension->getSetting('prompt')
 			);
+			$feedContent = (string)$entry->content(false);
+			try {
+				$cached = $extension->getCachedSummary($id, $entry->link(), $feedContent, $config);
+			} catch (\Throwable $e) {
+				$cached = null;
+				\Minz_Log::warning('FetchAndSummarize summary cache read failed (' . get_class($e) . ').');
+			}
+			if ($cached !== null) {
+				self::respond(200, $cached + ['cached' => true]);
+			}
 			$config['api_key'] = $extension->getSetting('api_key');
 			if ($provider !== 'ollama' && trim($config['api_key']) === '') {
 				self::respond(400, ['error' => 'Save an API key in the extension settings before requesting a summary.']);
@@ -83,16 +133,20 @@ final class AjaxActions {
 				$text = $extractor->extract($page['html']);
 			} catch (\RuntimeException $fetchError) {
 				try {
-					$text = $extractor->extractFeedContent((string)$entry->content(false));
+					$text = $extractor->extractFeedContent($feedContent);
 					$feedExcerpt = true;
 				} catch (\RuntimeException) {
 					throw $fetchError;
 				}
 			}
-			self::respond(200, [
-				'summary' => (new ProviderClient())->summarize($config, $text, $feedExcerpt),
-				'source' => $feedExcerpt ? 'feed' : 'article',
-			]);
+			$summary = (new ProviderClient())->summarize($config, $text, $feedExcerpt);
+			$source = $feedExcerpt ? 'feed' : 'article';
+			try {
+				$extension->cacheSummary($id, $entry->link(), $feedContent, $config, $summary, $source);
+			} catch (\Throwable $e) {
+				\Minz_Log::warning('FetchAndSummarize summary cache write failed (' . get_class($e) . ').');
+			}
+			self::respond(200, ['summary' => $summary, 'source' => $source, 'cached' => false]);
 		} catch (\InvalidArgumentException $e) {
 			self::respond(400, ['error' => $e->getMessage()]);
 		} catch (\Throwable $e) {

@@ -2,7 +2,79 @@
 	'use strict';
 
 	const active = new Set();
+	const activeFeedJobs = new Set();
+	const batchSummaries = new Map();
+	const MAX_BATCH_CACHE_ENTRIES = 300;
+	const MAX_BATCH_CACHE_BYTES = 3_000_000;
 	const config = () => window.context?.extensions?.fetch_and_summarize;
+
+	function rememberBatchSummary(id, data) {
+		const item = {
+			summary: data.summary,
+			source: data.source === 'feed' ? 'feed' : 'article',
+			bytes: new TextEncoder().encode(data.summary).length + 128,
+		};
+		batchSummaries.delete(id);
+		batchSummaries.set(id, item);
+		let totalBytes = Array.from(batchSummaries.values()).reduce((total, cached) => total + cached.bytes, 0);
+		while (batchSummaries.size > MAX_BATCH_CACHE_ENTRIES || totalBytes > MAX_BATCH_CACHE_BYTES) {
+			const oldestId = batchSummaries.keys().next().value;
+			totalBytes -= batchSummaries.get(oldestId).bytes;
+			batchSummaries.delete(oldestId);
+		}
+		return item;
+	}
+
+	function showSummary(id, data, settings) {
+		const cached = rememberBatchSummary(id, data);
+		const result = document.getElementById(`fetchandsummarize-result-${id}`);
+		if (!result) return;
+		const sourceLine = cached.source === 'feed' ? settings.i18n.summaryFeed : settings.i18n.summaryArticle;
+		result.textContent = `${sourceLine}\n\n${cached.summary}`;
+		result.classList.add('fetchandsummarize-summary');
+	}
+
+	async function postJson(url, body, fallbackMessage) {
+		const response = await fetch(url, {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+			body: new URLSearchParams(body),
+		});
+		let data;
+		try {
+			data = await response.json();
+		} catch {
+			throw new Error(`FreshRSS returned a non-JSON response (HTTP ${response.status}). Reload the page and verify the extension is enabled.`);
+		}
+		if (!response.ok) {
+			const error = new Error(typeof data.error === 'string' ? data.error : fallbackMessage);
+			error.httpStatus = response.status;
+			throw error;
+		}
+		return data;
+	}
+
+	function addUnreadButton(settings) {
+		const feed = document.querySelector('#aside_feed li.active[id^="f_"]');
+		if (!feed || feed.querySelector('.fetchandsummarize-unread')) return;
+		const title = feed.querySelector('a.item-title');
+		if (!title || !feed.id.startsWith('f_')) return;
+		const feedId = feed.id.slice(2);
+		const button = document.createElement('button');
+		button.className = 'btn fetchandsummarize-unread';
+		button.type = 'button';
+		button.dataset.feedId = feedId;
+		button.textContent = settings.i18n.unreadButton;
+		button.setAttribute('aria-describedby', `fetchandsummarize-unread-status-${feedId}`);
+		const status = document.createElement('span');
+		status.className = 'fetchandsummarize-unread-status';
+		status.id = `fetchandsummarize-unread-status-${feedId}`;
+		status.setAttribute('role', 'status');
+		status.setAttribute('aria-live', 'polite');
+		title.after(button);
+		button.after(status);
+	}
 
 	function addButtons() {
 		const settings = config();
@@ -45,10 +117,60 @@
 			} else {
 				entry.prepend(result);
 			}
+			const cached = batchSummaries.get(button.dataset.entryId);
+			if (cached) showSummary(button.dataset.entryId, cached, settings);
 		});
+		addUnreadButton(settings);
 	}
 
 	document.addEventListener('click', async (event) => {
+		const unreadButton = event.target.closest('.fetchandsummarize-unread');
+		if (unreadButton) {
+			event.preventDefault();
+			const feedId = unreadButton.dataset.feedId;
+			if (activeFeedJobs.has(feedId)) return;
+			const settings = config();
+			const status = document.getElementById(`fetchandsummarize-unread-status-${feedId}`);
+			if (!settings || !status) return;
+
+			activeFeedJobs.add(feedId);
+			unreadButton.disabled = true;
+			status.setAttribute('role', 'status');
+			try {
+				const unread = await postJson(settings.unreadUrl, { feed_id: feedId, _csrf: window.context.csrf }, settings.i18n.unreadError);
+				const ids = Array.isArray(unread.ids) ? unread.ids.filter((id) => typeof id === 'string' && /^\d{1,20}$/.test(id)) : [];
+				if (ids.length === 0) {
+					status.textContent = settings.i18n.unreadEmpty;
+					return;
+				}
+				let completed = 0;
+				let failed = 0;
+				for (let index = 0; index < ids.length; index++) {
+					status.textContent = settings.i18n.unreadProgress
+						.replace('{current}', String(index + 1))
+						.replace('{total}', String(ids.length));
+					try {
+						const data = await postJson(settings.url, { id: ids[index], _csrf: window.context.csrf }, settings.i18n.error);
+						showSummary(ids[index], data, settings);
+						completed++;
+					} catch (error) {
+						failed++;
+						if (error?.httpStatus === 401 || error?.httpStatus === 403) throw error;
+					}
+				}
+				status.textContent = failed === 0
+					? settings.i18n.unreadComplete.replace('{count}', String(completed))
+					: settings.i18n.unreadPartial.replace('{count}', String(completed)).replace('{total}', String(ids.length)).replace('{failed}', String(failed));
+			} catch (error) {
+				status.setAttribute('role', 'alert');
+				status.textContent = error instanceof Error ? error.message : settings.i18n.unreadError;
+			} finally {
+				activeFeedJobs.delete(feedId);
+				unreadButton.disabled = false;
+			}
+			return;
+		}
+
 		const button = event.target.closest('.fetchandsummarize-button');
 		if (!button) return;
 		event.preventDefault();
@@ -64,22 +186,8 @@
 		result.setAttribute('role', 'status');
 		result.textContent = settings.i18n.loading;
 		try {
-			const response = await fetch(settings.url, {
-				method: 'POST',
-				credentials: 'same-origin',
-				headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-				body: new URLSearchParams({ id, _csrf: window.context.csrf }),
-			});
-			let data;
-			try {
-				data = await response.json();
-			} catch {
-				throw new Error(`FreshRSS returned a non-JSON summary response (HTTP ${response.status}). Reload the page and verify the extension is enabled.`);
-			}
-			if (!response.ok) throw new Error(data.error || settings.i18n.error);
-			const sourceLine = data.source === 'feed' ? settings.i18n.summaryFeed : settings.i18n.summaryArticle;
-			result.textContent = `${sourceLine}\n\n${data.summary}`;
-			result.classList.add('fetchandsummarize-summary');
+			const data = await postJson(settings.url, { id, _csrf: window.context.csrf }, settings.i18n.error);
+			showSummary(id, data, settings);
 		} catch (error) {
 			result.setAttribute('role', 'alert');
 			result.textContent = error instanceof Error ? error.message : settings.i18n.error;

@@ -8,6 +8,14 @@ return [
 		'error' => 'The summary could not be created. Check the extension settings and try again.',
 		'summary_source_feed' => 'Summary source: text provided in the feed item.',
 		'summary_source_article' => 'Summary source: article fetched from the publisher\'s server.',
+		'unread' => [
+			'button' => 'F&S Unread',
+			'progress' => 'Summarizing unread item {current} of {total}...',
+			'complete' => 'Summarized {count} unread items.',
+			'partial' => 'Summarized {count} of {total} unread items; {failed} failed.',
+			'empty' => 'This feed has no unread items.',
+			'error' => 'Unread items for this feed could not be loaded.',
+		],
 		'saved' => 'Fetch and Summarize settings saved.',
 		'configure' => [
 			'title' => 'Fetch and Summarize',

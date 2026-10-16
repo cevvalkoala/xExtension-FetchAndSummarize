@@ -50,13 +50,15 @@ class Element {
 	addEventListener(name, handler) { this.listeners.set(name, handler); }
 
 	closest(selector) {
-		return selector === '.fetchandsummarize-button' && this.className.includes('fetchandsummarize-button') ? this : null;
+		const className = selector.slice(1);
+		return selector.startsWith('.') && this.className.includes(className) ? this : null;
 	}
 
 	querySelector(selector) {
 		if (selector === 'ul.flux_header, .flux_header') return this.header || null;
 		if (selector === '.flux_content .content > .text') return this.articleText || null;
 		if (selector === '.flux_content .content') return this.contentArea || null;
+		if (selector === 'a.item-title') return this.titleLink || null;
 		const className = selector.slice(1);
 		for (const child of this.children) {
 			if (child.className.includes(className)) return child;
@@ -100,6 +102,12 @@ const options = [
 	{ value: 'anthropic', dataset: { url: 'https://api.anthropic.com', model: 'claude-3-7-sonnet-latest' } },
 	{ value: 'gemini', dataset: { url: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash' } },
 ];
+const feedRow = new Element('li');
+feedRow.id = 'f_77';
+feedRow.className = 'active';
+feedRow.titleLink = new Element('a');
+feedRow.titleLink.className = 'item-title';
+feedRow.append(feedRow.titleLink);
 const providerControl = new Element('select');
 providerControl.value = 'openai';
 providerControl.options = options;
@@ -139,6 +147,7 @@ const allElements = () => {
 	const result = [];
 	const visit = (element) => { result.push(element); element.children.forEach(visit); };
 	entries.forEach(visit);
+	visit(feedRow);
 	return result;
 };
 
@@ -150,13 +159,18 @@ i18n: {
 		summaryArticle: 'Summary source: article fetched from the publisher\'s server.',
 		loadModels: 'Load models', loadingModels: 'Loading models...', modelsLoaded: 'Loaded {count} models.',
 		noModels: 'No models.', modelsError: 'Model list error.',
+		unreadButton: 'F&S Unread', unreadProgress: 'Summarizing unread item {current} of {total}...',
+		unreadComplete: 'Summarized {count} unread items.', unreadPartial: 'Summarized {count} of {total}; {failed} failed.',
+		unreadEmpty: 'No unread items.', unreadError: 'Could not load unread items.',
 	},
 modelsUrl: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=models',
+unreadUrl: './?c=extension&a=configure&e=FetchAndSummarize&fas_action=unread_ids',
 } } } };
 global.document = {
 	body: { addEventListener: (name, handler) => bodyHandlers.set(name, handler) },
 	addEventListener: (name, handler) => handlers.set(name, handler),
 	querySelectorAll: (selector) => selector === '[id^="flux_"]' ? entries : [],
+	querySelector: (selector) => selector === '#aside_feed li.active[id^="f_"]' ? feedRow : null,
 	createElement: (tagName) => new Element(tagName),
 	getElementById: (id) => controls.get(id) || allElements().find((element) => element.id === id) || null,
 };
@@ -164,7 +178,14 @@ global.document = {
 let requests = 0;
 let modelRequests = 0;
 let completeFirst;
+const summaryCalls = new Map();
 global.fetch = (url, options) => {
+	if (url === './?c=extension&a=configure&e=FetchAndSummarize&fas_action=unread_ids') {
+		const body = new URLSearchParams(options.body);
+		assert.equal(body.get('feed_id'), '77');
+		assert.equal(body.get('_csrf'), 'csrf-test');
+		return Promise.resolve({ ok: true, json: async () => ({ ids: ['101', '404'] }) });
+	}
 	if (url === './?c=extension&a=configure&e=FetchAndSummarize&fas_action=models') {
 		modelRequests++;
 		assert.equal(options.method, 'POST');
@@ -183,7 +204,10 @@ global.fetch = (url, options) => {
 	assert.equal(options.headers['Content-Type'], 'application/x-www-form-urlencoded; charset=UTF-8');
 	assert.equal(new URLSearchParams(options.body).get('_csrf'), 'csrf-test');
 	const id = new URLSearchParams(options.body).get('id');
-	if (id === '101') return new Promise((resolve) => { completeFirst = resolve; });
+	const count = (summaryCalls.get(id) || 0) + 1;
+	summaryCalls.set(id, count);
+	if (id === '101' && count === 1) return new Promise((resolve) => { completeFirst = resolve; });
+	if (id === '101') return Promise.resolve({ ok: true, json: async () => ({ source: 'article', summary: 'Cached article summary' }) });
 	if (id === '303') return Promise.resolve({ ok: false, status: 404, json: async () => { throw new SyntaxError('HTML error page'); } });
 	if (id === '404') return Promise.resolve({ ok: true, json: async () => ({ source: 'feed', summary: 'RSS excerpt summary' }) });
 	return Promise.resolve({ ok: false, json: async () => ({ error: 'The article target was rejected.' }) });
@@ -229,6 +253,9 @@ async function run() {
 	const button202 = entries[1].querySelector('.fetchandsummarize-button');
 	assert.ok(button101 && button202, 'controls should be inserted into multiple entries');
 	assert.equal(button101.textContent, 'F&S');
+	const unreadButton = feedRow.querySelector('.fetchandsummarize-unread');
+	assert.ok(unreadButton && feedRow.children[1] === unreadButton, 'F&S Unread should sit beside the active feed title');
+	assert.equal(unreadButton.textContent, 'F&S Unread');
 	assert.equal(button101.textContent, 'F&S');
 	assert.equal(button101.dataset.entryId, '101');
 	assert.ok(entries[1].children[0].className.includes('fetchandsummarize-toolbar'), 'entries without a standard header need a fallback toolbar');
@@ -258,11 +285,14 @@ async function run() {
 	bodyHandlers.get('freshrss:load-more')();
 	assert.ok(entries[2].querySelector('.fetchandsummarize-button'), 'load-more entries should receive a control');
 	await click({ target: entries[2].querySelector('.fetchandsummarize-button'), preventDefault() {} });
-	assert.match(document.getElementById('fetchandsummarize-result-303').textContent, /non-JSON summary response \(HTTP 404\)/);
+	assert.match(document.getElementById('fetchandsummarize-result-303').textContent, /non-JSON response \(HTTP 404\)/);
 	entries.push(new Entry('flux_404'));
 	bodyHandlers.get('freshrss:load-more')();
 	await click({ target: entries[3].querySelector('.fetchandsummarize-button'), preventDefault() {} });
 	assert.equal(document.getElementById('fetchandsummarize-result-404').textContent, 'Summary source: text provided in the feed item.\n\nRSS excerpt summary');
+	await click({ target: unreadButton, preventDefault() {} });
+	assert.equal(document.getElementById('fetchandsummarize-unread-status-77').textContent, 'Summarized 2 unread items.');
+	assert.equal(document.getElementById('fetchandsummarize-result-101').textContent, 'Summary source: article fetched from the publisher\'s server.\n\nCached article summary');
 
 	const css = fs.readFileSync(path.join(__dirname, '..', 'static', 'fetchandsummarize.css'), 'utf8');
 	assert.match(css, /@media\s*\(max-width:\s*600px\)/, 'mobile layout rules should be present');
