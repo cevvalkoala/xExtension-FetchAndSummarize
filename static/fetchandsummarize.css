@@ -6,6 +6,17 @@
 	margin-block: 0.5rem;
 }
 
+.fetchandsummarize-feed-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.fetchandsummarize-feed-toolbar .fetchandsummarize-unread {
+	margin-inline-start: auto;
+}
+
 .fetchandsummarize-button {
 	max-width: 100%;
 }
@@ -18,12 +29,12 @@
 }
 
 .fetchandsummarize-unread {
-	margin-inline-start: 0.35rem;
 	white-space: nowrap;
 }
 
 .fetchandsummarize-unread-status {
 	display: block;
+	flex-basis: 100%;
 	max-width: 22rem;
 	font-size: 0.85em;
 	white-space: normal;
