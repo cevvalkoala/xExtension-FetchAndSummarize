@@ -18,8 +18,11 @@ class Element {
 		this.listeners = new Map();
 		this.disabled = false;
 		this.parentElement = null;
-		this.textContent = '';
+		this._textContent = '';
 	}
+
+	get textContent() { return this._textContent + this.children.map((child) => child.textContent).join(''); }
+	set textContent(value) { this._textContent = value; this.children = []; }
 
 	append(...children) {
 		children.forEach((child) => {
@@ -42,6 +45,7 @@ class Element {
 
 	replaceChildren(...children) {
 		this.children = [];
+		this._textContent = '';
 		children.forEach((child) => this.append(child));
 	}
 
@@ -310,7 +314,10 @@ async function run() {
 	await Promise.all([firstClick, duplicateClick]);
 	const summary = document.getElementById('fetchandsummarize-result-101');
 	assert.equal(summary.textContent, 'Summary source: article fetched from the publisher\'s server.\n\n<img src=x onerror=alert(1)> plain text', 'article source must be shown before plain-text model output');
-	assert.equal(summary.children.length, 0, 'model output must never create HTML nodes');
+	assert.equal(summary.children.length, 2);
+	assert.equal(summary.children[0].tagName, 'strong', 'the source label must be bold');
+	assert.equal(summary.children[1].tagName, 'span');
+	assert.equal(summary.children[1].children.length, 0, 'model output must never create HTML nodes');
 	assert.equal(button101.disabled, false);
 
 	await click({ target: button202, preventDefault() {} });
@@ -329,9 +336,11 @@ async function run() {
 	bodyHandlers.get('freshrss:load-more')();
 	await click({ target: entries[3].querySelector('.fetchandsummarize-button'), preventDefault() {} });
 	assert.equal(document.getElementById('fetchandsummarize-result-404').textContent, 'Summary source: text provided in the feed item.\n\nRSS excerpt summary');
+	assert.equal(document.getElementById('fetchandsummarize-result-404').children[0].tagName, 'strong');
 	await click({ target: unreadButton, preventDefault() {} });
 	assert.equal(document.getElementById('fetchandsummarize-unread-status-77').textContent, 'Summarized 2 unread items.');
 	assert.equal(document.getElementById('fetchandsummarize-result-101').textContent, 'Summary source: article fetched from the publisher\'s server.\n\nCached article summary');
+	assert.equal(document.getElementById('fetchandsummarize-result-101').children.length, 2, 'rerendering must replace the previous summary');
 	entries.push(new Entry('flux_505'));
 	stream.append(entries[4]);
 	bodyHandlers.get('freshrss:load-more')();
@@ -341,6 +350,7 @@ async function run() {
 	assert.equal(cacheRequests, 1);
 	assert.equal(requests, beforeCacheLookup, 'opening an article should look up cached summaries without regenerating them');
 	assert.equal(document.getElementById('fetchandsummarize-result-505').textContent, 'Summary source: article fetched from the publisher\'s server.\n\nAutomatically restored summary');
+	assert.equal(document.getElementById('fetchandsummarize-result-505').children[0].tagName, 'strong');
 	await openArticle({ target: entries[4] });
 	assert.equal(cacheRequests, 1, 'cached summary lookup should happen once per opened entry');
 

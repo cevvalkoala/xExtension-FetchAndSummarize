@@ -37,6 +37,10 @@ return [
 			'no_models' => 'No compatible models were returned. You can still enter a model name manually.',
 			'models_error' => 'Models could not be loaded. Check the provider, API URL, and API key.',
 			'save' => 'Save settings',
+			'clear_cache' => 'Clear my summary cache',
+			'clear_cache_help' => 'Save any settings changes first. Summaries in progress may repopulate the cache.',
+			'cache_cleared' => 'Your summary cache was cleared.',
+			'cache_clear_failed' => 'Your summary cache could not be cleared.',
 		],
 	],
 ];

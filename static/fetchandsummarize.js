@@ -32,7 +32,11 @@
 		const result = document.getElementById(`fetchandsummarize-result-${id}`);
 		if (!result) return;
 		const sourceLine = cached.source === 'feed' ? settings.i18n.summaryFeed : settings.i18n.summaryArticle;
-		result.textContent = `${sourceLine}\n\n${cached.summary}`;
+		const source = document.createElement('strong');
+		source.textContent = sourceLine;
+		const summary = document.createElement('span');
+		summary.textContent = `\n\n${cached.summary}`;
+		result.replaceChildren(source, summary);
 		result.classList.add('fetchandsummarize-summary');
 	}
 

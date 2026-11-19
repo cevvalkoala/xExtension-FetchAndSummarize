@@ -63,6 +63,20 @@ final class FetchAndSummarizeExtension extends Minz_Extension {
 			FetchAndSummarize\AjaxActions::dispatch($this, $ajaxAction);
 			return;
 		}
+		if ($ajaxAction === 'clear_summary_cache') {
+			try {
+				$this->removeFile(self::SUMMARY_CACHE_FILE);
+				$cleared = !$this->hasFile(self::SUMMARY_CACHE_FILE);
+			} catch (Throwable $e) {
+				$cleared = false;
+			}
+			if ($cleared) {
+				Minz_Request::setGoodNotification(_t('ext.fetch_and_summarize.configure.cache_cleared'));
+			} else {
+				Minz_Request::setBadNotification(_t('ext.fetch_and_summarize.configure.cache_clear_failed'));
+			}
+			return;
+		}
 
 		$provider = Minz_Request::paramString('provider', plaintext: true);
 		$model = trim(Minz_Request::paramString('model', plaintext: true));

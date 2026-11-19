@@ -160,7 +160,7 @@ $test('feed fallback text is cleaned and bounded like article text', static func
 });
 
 $test('default prompt is exact and custom prompt remains verbatim', static function () use ($assert): void {
-	$assert(Settings::prompt('') === 'Fetch the article from the link. Analyze the article page and disregard unrelated things from the source. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.');
+	$assert(Settings::prompt('') === 'Summarize the article in this feed item. Fetch and analyze the linked article, ignoring unrelated content on the source page. If fetch fails use the article text included in the feed item as the source for your summary. If the selected source contains fewer than 350 words, report that and stop without summarizing. Otherwise, provide an approximately 200-word summary.');
 	$custom = "  Summarize in two bullets.\nKeep names unchanged.  ";
 	$assert(Settings::prompt($custom) === $custom);
 });
@@ -236,6 +236,19 @@ $test('summaries are cached per entry and invalidated when source or settings ch
 	$assert($data['cacheEntryCount'] <= 300 && $data['cacheBytes'] <= 3_000_000);
 	$assert($data['countCappedEntryCount'] === 300);
 	$assert(!str_contains(json_encode($data['files'], JSON_THROW_ON_ERROR), 'must-not-be-cached'));
+});
+
+$test('summary cache clearing is scoped and guarded', static function () use ($assert): void {
+	$pipes = [];
+	$process = proc_open([PHP_BINARY, __DIR__ . '/configure-case.php', 'test-cache-clear'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
+	if (!is_resource($process)) throw new RuntimeException('could not start cache clear case');
+	fclose($pipes[0]);
+	$output = stream_get_contents($pipes[1]);
+	$error = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	$status = proc_close($process);
+	$assert($status === 0 && trim($output) === 'cache clear fixture passed', 'cache clear child failed: ' . $error);
 });
 
 $test('settings reject invalid providers, models, and API URL schemes', static function () use ($throws): void {
@@ -430,7 +443,7 @@ $test('automatic cache lookup reports a miss without generating a summary', stat
 $test('metadata and runtime have no parser vendor bundle', static function () use ($assert): void {
 	$root = dirname(__DIR__);
 	$metadata = json_decode((string)file_get_contents($root . '/metadata.json'), true, 512, JSON_THROW_ON_ERROR);
-	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['version'] === '1.2.0' && $metadata['license'] === 'CC0-1.0');
+	$assert($metadata['entrypoint'] === 'FetchAndSummarize' && $metadata['type'] === 'user' && $metadata['version'] === '1.2.1' && $metadata['license'] === 'CC0-1.0');
 	$extension = (string)file_get_contents($root . '/extension.php');
 	$ajax = (string)file_get_contents($root . '/lib/AjaxActions.php');
 	$assert(str_contains($extension, "'c' => 'extension', 'a' => 'configure'"));

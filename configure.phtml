@@ -69,5 +69,11 @@ $apiUrl = $apiUrl === '' ? FetchAndSummarize\Settings::DEFAULT_URLS[$provider] :
 			<button class="btn btn-important" type="submit"><?= _t('ext.fetch_and_summarize.configure.save') ?></button>
 		</div>
 	</form>
+	<form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post">
+		<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+		<input type="hidden" name="fas_action" value="clear_summary_cache" />
+		<button class="btn" type="submit"><?= _t('ext.fetch_and_summarize.configure.clear_cache') ?></button>
+		<p class="help"><?= _t('ext.fetch_and_summarize.configure.clear_cache_help') ?></p>
+	</form>
 	<script src="<?= $this->getFileUrl('fetchandsummarize-configure.js') ?>" defer></script>
 </section>

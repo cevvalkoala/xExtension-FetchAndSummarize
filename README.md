@@ -38,7 +38,7 @@ sudo chown -R www-data:www-data xExtension-FetchAndSummarize
 6. Open the normal article stream and use **F&S** on an article.
 7. Use **F&S Unread** beside the selected feed name to summarize all unread entries in that feed. The batch processes every unread item; it does not stop at the cache limit.
 
-The summary action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. The **F&S Unread** action accepts a feed ID and queries unread entry IDs from that same user's store. Neither action accepts article URLs from the browser.
+The summary action accepts only a FreshRSS entry ID and looks up its link in the current user's entry store. The **F&S Unread** action accepts a feed ID and queries unread entry IDs from that same user's store. Neither action accepts article URLs from the browser. The configuration page can clear the current user's saved summaries; save any settings changes first. Summaries already displayed in open tabs remain until reloaded, and requests in progress may repopulate the cache.
 
 ## Provider settings
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace FetchAndSummarize;
 
 final class Settings {
-	public const DEFAULT_PROMPT = 'Fetch the article from the link. Analyze the article page and disregard unrelated things from the source. If the content is shorter than 350 words, tell me and stop there. If otherwise, give a 200-word summary for this article in FreshRSS interface language.';
+	public const DEFAULT_PROMPT = 'Summarize the article in this feed item. Fetch and analyze the linked article, ignoring unrelated content on the source page. If fetch fails use the article text included in the feed item as the source for your summary. If the selected source contains fewer than 350 words, report that and stop without summarizing. Otherwise, provide an approximately 200-word summary.';
 
 	/** @var array<string,string> */
 	public const DEFAULT_URLS = [
